@@ -15,11 +15,21 @@ kramdown:
 sass:
   style: compressed
 
+# Mount mapping — override per site if you rename the on-disk dir or URL base.
+# `publish` is the on-disk directory the site author mounts content into.
+# `journal` is the public URL base and the _data/git namespace.
+# These are intentionally decoupled: real path != url path.
+publish: publish
+journal: journal
+
 defaults:
   - scope: {path: ""}
     values:
       preferences: journal
-  - scope: {path: "journal"}
+  # NOTE: scope.path matches the ON-DISK source path and cannot interpolate
+  # config, so it is the literal mount dir. A site that overrides `publish`
+  # must add a matching scope in its own _config.yml (merged config appends it).
+  - scope: {path: "publish"}
     values:
       layout: journal
 
@@ -29,6 +39,16 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor
+  # Non-content siblings at the flattened repo root:
+  - journal/         # the engine submodule (trailing slash: dir only, not the `journal` layout)
+  - node_modules
+  - package.json
+  - package-lock.json
+  - README.md        # repo-meta README (served pages live at readme.md/license.md)
+  - LICENSE.md
+  - AGENTS.md
+  - .github
+  - bin
 
 plugins:
   - jekyll-link-attributes

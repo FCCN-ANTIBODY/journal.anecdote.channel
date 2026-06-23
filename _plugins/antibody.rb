@@ -6,12 +6,24 @@ require "uri"
 module Jekyll
   module Antibody
     def antibody_data_key(piece_url)
-      # We eat some punctuation & the extension that jekyll disallows in _data.
-      # Namely, ' and /, and the .md suffix.
-      # / is safe when talking about path traversals in _data, but we make _data
-      # files which contain whole paths in them, preprocessing `/` to `,`.
+      # The bin/stat-*.sh writers name _data files by comma-encoding the path,
+      # e.g. publish/autumn-ryan/foo/index.md -> journal,autumn-ryan,foo,index.json.
+      # But Jekyll's DataReader sanitizes those filenames into hash keys by
+      # DROPPING the commas (and other punctuation) while keeping word chars and
+      # hyphens, so the live key is "journalautumn-ryanfooindex". We therefore
+      # strip ' / and the .md suffix to land on the same crunched string — only
+      # swapping the on-disk mount prefix (publish) for the URL/_data base
+      # (journal) so the namespace matches what the writers prepended.
 
-      piece_url.to_s.gsub(/[\'\/]/, "").sub(/\.md\z/, "")
+      site  = @context.registers[:site] if defined?(@context) && @context
+      mount = (site && site.config["publish"]).to_s
+      base  = (site && site.config["journal"]).to_s
+      mount = "publish" if mount.empty?
+      base  = "journal" if base.empty?
+
+      key = piece_url.to_s.gsub("'", "").sub(/\.md\z/, "")
+      key = key.sub(%r{\A/?#{Regexp.escape(mount)}/}, "#{base}/")
+      key.gsub("/", "")
     end
 
     def antibody_domain(any_url)

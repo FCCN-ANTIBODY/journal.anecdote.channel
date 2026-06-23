@@ -4,11 +4,17 @@
 set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"; cd "$repo_root"
 
-f="${1:-}"; [ -n "$f" ] || { echo "usage: $0 <path>"; exit 2; }
-f="${1#*/}"
+src="${1:-}"; [ -n "$src" ] || { echo "usage: $0 <path>"; exit 2; }
+MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
+DATA_ROOT="${JOURNAL_DATA_ROOT:-_data/git}"
 
-out_dir="docs/_data/git/paragraphs"; mkdir -p "$out_dir"
-out="$out_dir/${f//\//,}.json"
+# _data key: drop the on-disk mount prefix, prepend the URL base, comma-encode.
+rel="${src#"$MOUNT"/}"
+key="$BASE/${rel%.md}"
 
-bash bin/stat-paragraph-log.sh "$f" | node bin/stat-paragraph.js > "$out"
+out_dir="$DATA_ROOT/paragraphs"; mkdir -p "$out_dir"
+out="$out_dir/${key//\//,}.json"
+
+bash bin/stat-paragraph-log.sh "$src" | node bin/stat-paragraph.js > "$out"
 echo "$out"

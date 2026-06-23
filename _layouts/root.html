@@ -24,7 +24,7 @@
   <meta property="og:image:height" content="128">
   {% if page.author -%}
   {% assign author_slug = page.author | slugify %}
-  {% assign author_sitemap = '/journal/' | append: author_slug | append: '/sitemap.xml' %}
+  {% assign author_sitemap = '/' | append: site.journal | append: '/' | append: author_slug | append: '/sitemap.xml' %}
   <meta property="profile:username" content="{{ page.author }}">
   <meta property="article:author" content="{{ author_sitemap | absolute_url }}">
   {%- endif %}

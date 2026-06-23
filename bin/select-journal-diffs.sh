@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PATTERN="docs/journal/**/index.md"
+PATTERN="${JOURNAL_MOUNT:-publish}/**/index.md"
 
 # Discover baseline
 if [[ -n "${GITHUB_SHA:-}" ]]; then

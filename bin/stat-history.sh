@@ -4,7 +4,9 @@
 
 set -eu
 
-out_root="docs/_data/git/history"
+MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
+out_root="${JOURNAL_DATA_ROOT:-_data/git}/history"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 mkdir -p "$out_root"
 
@@ -76,7 +78,8 @@ emit_json() {
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   rel="${f#./}"
-  short="${rel#*/}"
+  # _data key: drop the on-disk mount prefix, prepend the URL base, comma-encode.
+  short="$BASE/${rel#"$MOUNT"/}"
   short=$(printf '%s' "$short" | tr '/' ',')
   out="$out_root/${short%.md}.json"
   mkdir -p "$(dirname "$out")"

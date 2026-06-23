@@ -3,7 +3,7 @@
 # one paragraph.
 
 set -euo pipefail
-file="docs/$1"
+file="$1"  # repo-root-relative path to the piece (e.g. publish/<author>/<piece>/index.md)
 head_sha="$(git rev-parse HEAD)"
 printf '{"file":"%s","head":"%s"}\n' "$file" "$head_sha"
 
