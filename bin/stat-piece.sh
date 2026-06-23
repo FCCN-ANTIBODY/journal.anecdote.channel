@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # NOTICE: Vibe code: Get the latest commit ref for each paragraph, 1-indexed.
-# These go to docs/_data/git/blame/
+# These go to $JOURNAL_DATA_ROOT/blame/ (default _data/git/blame/).
 
 set -euo pipefail
 
 PIECE_PATH=$1
-f="${PIECE_PATH#*/}"  # Remove built-in docroot for an internal reference
-f="${f%.md}"
-DOC_ROOT="docs"
-out_dir="$DOC_ROOT/_data/git/blame"
+MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
+DATA_ROOT="${JOURNAL_DATA_ROOT:-_data/git}"
+
+# _data key: drop the on-disk mount prefix, prepend the URL base, comma-encode.
+rel="${PIECE_PATH#"$MOUNT"/}"
+f="$BASE/${rel%.md}"
+out_dir="$DATA_ROOT/blame"
 # translate for key as a long filename
 out="$out_dir/${f//\//,}.json"
 mkdir -p "$out_dir"
@@ -23,7 +27,7 @@ awk '
   BEGIN{para=0; blank=1}
   /^[[:space:]]*$/ {blank=1; next}
   { if (blank) { para++; blank=0 } printf("%d\t%d\n", NR, para) }
-' "$DOC_ROOT/$f.md" > "$pmap"
+' "$PIECE_PATH" > "$pmap"
 
 # lineno -> commit sha
 git -c core.quotepath=off blame --line-porcelain -- "$PIECE_PATH" |
