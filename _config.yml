@@ -1,0 +1,53 @@
+# Jekyll structural options — do not override these in your site config
+theme: null
+permalink: pretty
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  hard_wrap: false
+  gfm_quirks: paragraph_end
+  template: ""
+  math_engine: mathjax
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    default_lang: plaintext
+sass:
+  style: compressed
+
+defaults:
+  - scope: {path: ""}
+    values:
+      preferences: journal
+  - scope: {path: "journal"}
+    values:
+      layout: journal
+
+exclude:
+  - CNAME
+  - .bundle
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+
+plugins:
+  - jekyll-link-attributes
+  - jekyll-redirect-from
+
+# Site-identity placeholders — override all of these in your site's _config.yml
+title: Journal
+civic_node: ""
+civic_abbr: ""
+civic_tag: ""
+civic_readme: ""
+civic_license: ""
+license: ""
+license_extra: ""
+license_badge: ""
+license_url: ""
+repo_url: ""
+repo_name: ""
+og_description: ""
+preferences:
+  dark: false
+  year: "2026"
