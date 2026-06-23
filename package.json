@@ -1,0 +1,13 @@
+{
+  "comment": "Journal engine — the build logic a mounting site relays to. Run these from a site root that mounts this engine at journal/ (see bin/*.sh).",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "stats": "bin/stats.sh",
+    "sync": "bin/sync.sh",
+    "build": "bin/build.sh",
+    "serve": "bin/serve.sh",
+    "prebuild": "bin/stats.sh"
+  }
+}
