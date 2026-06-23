@@ -13,4 +13,4 @@ while read -r para start end; do
   --format='%H%x00%aN <%aE>%x00%aI%x00%s' -p -L "$start,$end:$file" \
   | perl -0777 -ne 'print'  # pass through as one blob
   printf '\n---ENDPARA---\n'
-done < <(bin/stat-paragraphs-ranges.sh "$file")
+done < <("$(dirname "$0")/stat-paragraphs-ranges.sh" "$file")
