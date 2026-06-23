@@ -14,7 +14,23 @@ out="$out_dir/${f//\//,}.json"
 mkdir -p "$out_dir"
 echo $out
 
-head_sha="$(git rev-parse HEAD)"
+_submodule_root() {
+  local dir; dir="$(dirname "$1")"
+  while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+    [ -f "$dir/.git" ] && { echo "$dir"; return; }
+    dir="$(dirname "$dir")"
+  done
+}
+
+sm_dir="$(_submodule_root "$PIECE_PATH")"
+if [ -n "$sm_dir" ]; then
+  _sm_rel="${PIECE_PATH#${sm_dir}/}"
+  head_sha="$(git -C "$sm_dir" rev-parse HEAD)"
+  _blame() { git -C "$sm_dir" -c core.quotepath=off blame --line-porcelain -- "$_sm_rel"; }
+else
+  head_sha="$(git rev-parse HEAD)"
+  _blame() { git -c core.quotepath=off blame --line-porcelain -- "$PIECE_PATH"; }
+fi
 
 pmap="$(mktemp)"; bmap="$(mktemp)"; trap 'rm -f "$pmap" "$bmap"' EXIT
 
@@ -26,7 +42,7 @@ awk '
 ' "$DOC_ROOT/$f.md" > "$pmap"
 
 # lineno -> commit sha
-git -c core.quotepath=off blame --line-porcelain -- "$PIECE_PATH" |
+_blame |
 awk '
   /^[0-9a-f]{7,40} [0-9]+ [0-9]+ [0-9]+$/ { sha=$1; ln=$3; next }
   /^\t/ { commit[ln]=sha; ln++; next }

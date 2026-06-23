@@ -58,19 +58,36 @@ print(json.dumps({
 }, indent=2))
 '
 
+_submodule_root() {
+  local dir; dir="$(dirname "$1")"
+  while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+    [ -f "$dir/.git" ] && { echo "$dir"; return; }
+    dir="$(dirname "$dir")"
+  done
+}
+
 emit_json() {
   path="$1"
   wd_regex=${WORD_DIFF_REGEX:-'\w+|[^\s\w]'}
   diff_alg=${DIFF_ALG:-histogram}
   sentinel=$'\036'
 
-  git -C "$repo_root" \
+  sm_dir="$(_submodule_root "$path")"
+  if [ -n "$sm_dir" ]; then
+    git_root="$(git -C "$sm_dir" rev-parse --show-toplevel)"
+    git_path="${path#${sm_dir}/}"
+  else
+    git_root="$repo_root"
+    git_path="$path"
+  fi
+
+  git -C "$git_root" \
     -c diff.wordRegex="$wd_regex" \
     -c diff.algorithm="$diff_alg" \
     log --follow -M --no-merges \
     --format="${sentinel}%H %cI %cd" --date=format:%G-W%V \
-    -p -U0 --word-diff=plain --no-color --no-ext-diff --no-textconv -- "$path" \
-  | python3 -c "$read_only_py" "$path" "$repo_root" "$sentinel"
+    -p -U0 --word-diff=plain --no-color --no-ext-diff --no-textconv -- "$git_path" \
+  | python3 -c "$read_only_py" "$git_path" "$git_root" "$sentinel"
 }
 
 while IFS= read -r f; do
