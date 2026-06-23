@@ -4,10 +4,12 @@
 
 set -eu
 
+BIN="$(cd "$(dirname "$0")" && pwd)"
+. "$BIN/lib.sh"
+
 MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
 BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
 out_root="${JOURNAL_DATA_ROOT:-_data/git}/history"
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 mkdir -p "$out_root"
 
 # Python program (reads git log from stdin, args: path repo_root)
@@ -62,17 +64,18 @@ print(json.dumps({
 
 emit_json() {
   path="$1"
+  resolve_owner "$path"   # OWNER_REPO / OWNER_REL: where this piece's history lives
   wd_regex=${WORD_DIFF_REGEX:-'\w+|[^\s\w]'}
   diff_alg=${DIFF_ALG:-histogram}
   sentinel=$'\036'
 
-  git -C "$repo_root" \
+  git -C "$OWNER_REPO" \
     -c diff.wordRegex="$wd_regex" \
     -c diff.algorithm="$diff_alg" \
     log --follow -M --no-merges \
     --format="${sentinel}%H %cI %cd" --date=format:%G-W%V \
-    -p -U0 --word-diff=plain --no-color --no-ext-diff --no-textconv -- "$path" \
-  | python3 -c "$read_only_py" "$path" "$repo_root" "$sentinel"
+    -p -U0 --word-diff=plain --no-color --no-ext-diff --no-textconv -- "$OWNER_REL" \
+  | python3 -c "$read_only_py" "$path" "$OWNER_REPO" "$sentinel"
 }
 
 while IFS= read -r f; do

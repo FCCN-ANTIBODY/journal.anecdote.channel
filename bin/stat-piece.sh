@@ -4,10 +4,17 @@
 
 set -euo pipefail
 
+BIN="$(cd "$(dirname "$0")" && pwd)"
+. "$BIN/lib.sh"
+
 PIECE_PATH=$1
 MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
 BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
 DATA_ROOT="${JOURNAL_DATA_ROOT:-_data/git}"
+
+# The piece's line history lives in whatever repo owns it (the site, or a mounted
+# submodule like cite-autumn-ryan); blame there, with its repo-relative path.
+resolve_owner "$PIECE_PATH"
 
 # _data key: drop the on-disk mount prefix, prepend the URL base, comma-encode.
 rel="${PIECE_PATH#"$MOUNT"/}"
@@ -18,7 +25,7 @@ out="$out_dir/${f//\//,}.json"
 mkdir -p "$out_dir"
 echo $out
 
-head_sha="$(git rev-parse HEAD)"
+head_sha="$(git -C "$OWNER_REPO" rev-parse HEAD)"
 
 pmap="$(mktemp)"; bmap="$(mktemp)"; trap 'rm -f "$pmap" "$bmap"' EXIT
 
@@ -29,10 +36,10 @@ awk '
   { if (blank) { para++; blank=0 } printf("%d\t%d\n", NR, para) }
 ' "$PIECE_PATH" > "$pmap"
 
-# lineno -> commit sha
-git -c core.quotepath=off blame --line-porcelain -- "$PIECE_PATH" |
+# lineno -> commit sha (blame in the owning repo, with its repo-relative path)
+git -C "$OWNER_REPO" -c core.quotepath=off blame --line-porcelain -- "$OWNER_REL" |
 awk '
-  /^[0-9a-f]{7,40} [0-9]+ [0-9]+ [0-9]+$/ { sha=$1; ln=$3; next }
+  /^[0-9a-f]+ [0-9]+ [0-9]+ [0-9]+$/ { sha=$1; ln=$3; next }
   /^\t/ { commit[ln]=sha; ln++; next }
   END { for (i in commit) printf("%d\t%s\n", i, commit[i]) }
 ' > "$bmap"
