@@ -3,14 +3,18 @@
 # one paragraph.
 
 set -euo pipefail
-file="$1"  # repo-root-relative path to the piece (e.g. publish/<author>/<piece>/index.md)
-head_sha="$(git rev-parse HEAD)"
+BIN="$(cd "$(dirname "$0")" && pwd)"
+. "$BIN/lib.sh"
+
+file="$1"  # site-root-relative path to the piece (e.g. publish/<author>/<piece>/index.md)
+resolve_owner "$file"   # OWNER_REPO / OWNER_REL: where the line history lives
+head_sha="$(git -C "$OWNER_REPO" rev-parse HEAD)"
 printf '{"file":"%s","head":"%s"}\n' "$file" "$head_sha"
 
 while read -r para start end; do
   printf '{"para":%d,"range":[%d,%d]}\n' "$para" "$start" "$end"
-  git -c core.quotepath=off log --no-color --no-decorate \
-  --format='%H%x00%aN <%aE>%x00%aI%x00%s' -p -L "$start,$end:$file" \
+  git -C "$OWNER_REPO" -c core.quotepath=off log --no-color --no-decorate \
+  --format='%H%x00%aN <%aE>%x00%aI%x00%s' -p -L "$start,$end:$OWNER_REL" \
   | perl -0777 -ne 'print'  # pass through as one blob
   printf '\n---ENDPARA---\n'
-done < <(bin/stat-paragraphs-ranges.sh "$file")
+done < <("$BIN/stat-paragraphs-ranges.sh" "$file")

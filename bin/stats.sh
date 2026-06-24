@@ -8,14 +8,12 @@ eng="${JOURNAL_ENGINE:-journal}"        # mounted engine path, from the site roo
 export JOURNAL_MOUNT="${JOURNAL_MOUNT:-publish}"
 export JOURNAL_BASE="${JOURNAL_BASE:-journal}"
 
-# NOTE: no --recurse-submodules on purpose. git blame/log can only read line
-# history for pieces tracked in THIS repo, so stats are generated for content
-# committed directly under the mount dir. Pieces that live in a submodule list to
-# nothing here and are skipped (their history feature stays dormant) rather than
-# erroring the build.
-pieces="$(git ls-files "$JOURNAL_MOUNT/**/index.md")"
+# Enumerate pieces on disk (not via git ls-files): a mounted submodule's files
+# don't show in the superproject index, but each piece's history is resolved in
+# its owning repo by the stat-* scripts (see bin/lib.sh resolve_owner).
+pieces="$(find "$JOURNAL_MOUNT" -name .git -prune -o -type f -name index.md -print 2>/dev/null | sort)"
 if [ -z "$pieces" ]; then
-  echo "stats: no pieces tracked under $JOURNAL_MOUNT/ in this repo; skipping"
+  echo "stats: no pieces found under $JOURNAL_MOUNT/; skipping"
   exit 0
 fi
 
