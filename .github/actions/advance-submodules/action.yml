@@ -1,0 +1,30 @@
+name: Advance author submodules to HEAD
+description: >-
+  Advances all publish/* submodule pins in the calling repository to their
+  current HEAD, commits, and pushes to main.
+
+runs:
+  using: composite
+  steps:
+    - name: Advance all publish/* submodule pins to HEAD
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+          | awk '$2 ~ /^\/publish\//' \
+          | awk '{print $2}' \
+          | while read -r path; do
+              git submodule update --init "$path"
+              url=$(git -C "$path" remote get-url origin)
+              latest=$(git ls-remote "$url" HEAD | awk '{print $1}')
+              git -C "$path" fetch origin
+              git -C "$path" checkout "$latest"
+              git add "$path"
+            done
+
+        git diff --cached --quiet || {
+          git commit -m "ci: weekly advance submodules to HEAD [skip ci]"
+          git push origin main
+        }
+      shell: bash
