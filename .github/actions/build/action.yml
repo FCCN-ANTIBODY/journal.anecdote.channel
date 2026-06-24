@@ -1,0 +1,53 @@
+name: Build Journal site
+description: >-
+  Build steps for a site that mounts this engine at journal/.
+  Call this after checkout with submodules; the deploy job stays
+  in the calling workflow.
+
+runs:
+  using: composite
+  steps:
+    - name: Ensure full submodule history
+      run: git submodule foreach --recursive 'git fetch --unshallow 2>/dev/null || true'
+      shell: bash
+
+    - name: Configure bundler
+      run: echo "BUNDLE_GEMFILE=journal/Gemfile" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: journal/.nvmrc
+
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
+
+    - name: Read mount config from _config.yml
+      run: |
+        ruby -e "
+          require 'yaml'
+          c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}
+          puts 'JOURNAL_MOUNT=' + c.fetch('publish', 'publish')
+          puts 'JOURNAL_BASE=' + c.fetch('journal', 'journal')
+        " >> $GITHUB_ENV
+      shell: bash
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v5
+
+    - name: Generate git-history data
+      run: journal/bin/stats.sh
+      shell: bash
+
+    - name: Build with Jekyll
+      run: journal/bin/build.sh
+      shell: bash
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: _site
