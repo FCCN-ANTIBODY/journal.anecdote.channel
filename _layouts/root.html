@@ -15,7 +15,7 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
 
   <meta property="og:site_name" content="{{ site.civic_abbr }}-{{ site.title }}" />
-  <meta property="og:title" content="{{ page.title | site.civic_tag }}" />
+  <meta property="og:title" content="{{ page.title | default: site.civic_tag }}" />
   <meta property="og:url" content="{{ page.url | absolute_url }}" />
   <meta property="og:description" content="{{ page.tags | join: ', ' | default: site.og_description }}" />
   <meta property="og:type" content="{% if page.url == '/' %}website{% else %}article{% endif %}" />
