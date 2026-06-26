@@ -28,6 +28,16 @@ runs:
         git diff --quiet journal || {
           git add journal
           git commit -m "ci: roll journal forward to ${{ steps.build.outputs.build_sha }} [skip ci]"
-          git push origin main
+          # Race-safe push: a workspace updater may advance the journal/atlas/tell
+          # pins in parallel jobs that all push to main. Each job stages only its
+          # own submodule path, so a concurrent advance is always a conflict-free
+          # rebase. Retry the push on rejection.
+          pushed=
+          for attempt in 1 2 3 4 5; do
+            if git push origin main; then pushed=1; break; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; break; }
+          done
+          [ -n "$pushed" ] || { echo "push to main failed after retries" >&2; exit 1; }
         }
       shell: bash
