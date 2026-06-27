@@ -1,0 +1,62 @@
+name: "Journal widget"
+description: >-
+  Render the DATA-FILLED Journal widget fragment from the CALLING node's own identity, into
+  the node's workspace. The counterpart to the baked BASELINE at widget/public.html: that
+  one is a static, dataless shell a node picks up by bumping this submodule's pin; this one
+  is rendered FROM the node's on-disk identity at build time, so it carries the node's own
+  first-party journal locator QR. The bundled bin/widget is the CODE; the node's _config.yml
+  is the DATA, read from the calling workspace (overridable) — so any node that drops this in
+  renders a locator to ITS OWN journal, never the template's.
+
+  Unlike tell's widget — whose QR hands a geo-less stem to a SHARED hub that fills the
+  scanner's state and redirects — a journal is the node's OWN self-hosted record, so this QR
+  points straight at the node's own site (<url>/<journal>/), no hub and no redirect.
+
+  Runs in the WORKSPACE context, where this engine is mounted at journal/ and the node carries
+  its identity at the repo root — the same submodule-path convention civic-node already uses
+  for ./journal/.github/actions/build and ./journal/.github/actions/advance-engine. It only
+  writes a fragment into the workspace; it never deploys (the node's own site build serves it)
+  and never reaches another repo.
+
+inputs:
+  url:
+    description: "The node's published origin (an http(s) URL). Blank => read `url` from the config file."
+    required: false
+    default: ""
+  mount:
+    description: "The journal URL base (the `journal` mount). Blank => read `journal` from the config file, else `journal`."
+    required: false
+    default: ""
+  config:
+    description: "Path in the CALLING workspace to the node's site config (provides url + journal mount)."
+    required: false
+    default: "_config.yml"
+  out:
+    description: >-
+      Path in the CALLING workspace to write the fragment to. The default is a
+      self-contained static file (no Jekyll front matter, no include) served at
+      /widget/journal.html — it deliberately does NOT live under the engine-managed
+      _includes/, so the node build never couples to the engine's include resolution.
+    required: false
+    default: "widget/journal.html"
+  install-qrencode:
+    description: "Apt-install qrencode on the runner (set false if already present). Without it the fragment degrades to a text link."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install qrencode
+      if: ${{ inputs.install-qrencode == 'true' }}
+      shell: bash
+      run: command -v qrencode >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y qrencode; }
+
+    - name: Render the data-filled Journal widget fragment
+      shell: bash
+      env:
+        SITE_URL: ${{ inputs.url }}
+        MOUNT: ${{ inputs.mount }}
+        CONFIG: ${{ inputs.config }}
+        OUT: ${{ inputs.out }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh"
