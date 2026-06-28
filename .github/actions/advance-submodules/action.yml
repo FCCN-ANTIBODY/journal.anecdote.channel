@@ -1,7 +1,7 @@
 name: Advance author submodules to HEAD
 description: >-
   Advances all author/content submodule pins under the site's content mount (the
-  `publish` key in _config.yml, default `publish`) to their current HEAD, commits,
+  `journal` key in _config.yml, default `journal`) to their current HEAD, commits,
   and pushes to main. The engine submodule lives outside that mount (e.g.
   .journal-engine) and is advanced separately by advance-engine.
 
@@ -13,9 +13,11 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-        # Content mounts under the `publish` dir (decoupled from the URL base): a
-        # site that overrides it (e.g. publish: journal) advances submodules there.
-        mount=$(ruby -e "require 'yaml'; c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}; print c.fetch('publish', 'publish')")
+        # Content mounts under the `journal` dir (the single content-dir/url-base key,
+        # the same one build/action.yml and bin/stats.sh read). Author submodules
+        # under it (e.g. journal/<author>) are advanced; the engine (.journal-engine)
+        # sits outside it and is rolled by advance-engine instead.
+        mount=$(ruby -e "require 'yaml'; c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}; print c.fetch('journal', 'journal')")
 
         git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
           | awk -v m="$mount" '$2 ~ ("^" m "/")' \
