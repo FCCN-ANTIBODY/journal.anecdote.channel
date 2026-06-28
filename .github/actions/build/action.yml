@@ -1,19 +1,28 @@
 name: Build Journal site
 description: >-
-  Builds a site that mounts this engine at journal/. When try_latest is true,
-  fetches the current journal tip and attempts that build first; if it fails,
-  falls back to the committed submodule pin (last-known-good), generates
-  _data/journal_notice.yml so the site can surface a banner, and deploys the
-  LKG build. On success the caller can write the SHA back as the new pin.
+  Builds a site that mounts this engine (default at journal/, overridable via the
+  `engine` input). When try_latest is true, fetches the current engine tip and
+  attempts that build first; if it fails, falls back to the committed submodule pin
+  (last-known-good), generates _data/journal_notice.yml so the site can surface a
+  banner, and deploys the LKG build. On success the caller can write the SHA back as
+  the new pin.
 
 inputs:
   try_latest:
     description: >-
-      Fetch and attempt to build with the current journal tip before falling back
+      Fetch and attempt to build with the current engine tip before falling back
       to the committed submodule pin. Enable only on main-branch builds that can
       write back the result.
     required: false
     default: 'false'
+  engine:
+    description: >-
+      On-disk path the engine submodule is mounted at, relative to the site root.
+      Defaults to `.journal-engine` (the engine's own convention: machinery hidden
+      under a dotted dir, content at journal/). A site that mounts it elsewhere
+      passes its path here so every hardcoded engine reference below resolves.
+    required: false
+    default: '.journal-engine'
 
 outputs:
   build_sha:
@@ -26,34 +35,42 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve engine path
+      # Export the engine mount path so every later run-step (and bin/*.sh, which
+      # honor JOURNAL_ENGINE) resolves it. $GITHUB_ENV is visible to later run
+      # steps but NOT to `with:` input expansion, so node-version-file below must
+      # use ${{ inputs.engine }} directly.
+      run: echo "JOURNAL_ENGINE=${{ inputs.engine }}" >> $GITHUB_ENV
+      shell: bash
+
     - name: Ensure full submodule history
       run: git submodule foreach --recursive 'git fetch --unshallow 2>/dev/null || true'
       shell: bash
 
     - name: Record last-known-good journal SHA
-      run: echo "JOURNAL_LKG_SHA=$(git -C journal rev-parse HEAD)" >> $GITHUB_ENV
+      run: echo "JOURNAL_LKG_SHA=$(git -C "$JOURNAL_ENGINE" rev-parse HEAD)" >> $GITHUB_ENV
       shell: bash
 
     - name: Fetch latest journal tip
       if: inputs.try_latest == 'true'
       run: |
-        git -C journal fetch origin main
-        echo "JOURNAL_LATEST_SHA=$(git -C journal rev-parse FETCH_HEAD)" >> $GITHUB_ENV
+        git -C "$JOURNAL_ENGINE" fetch origin main
+        echo "JOURNAL_LATEST_SHA=$(git -C "$JOURNAL_ENGINE" rev-parse FETCH_HEAD)" >> $GITHUB_ENV
       shell: bash
 
     - name: Advance journal to latest
       if: inputs.try_latest == 'true'
-      run: git -C journal checkout "$JOURNAL_LATEST_SHA"
+      run: git -C "$JOURNAL_ENGINE" checkout "$JOURNAL_LATEST_SHA"
       shell: bash
 
     - name: Configure bundler
-      run: echo "BUNDLE_GEMFILE=journal/Gemfile" >> $GITHUB_ENV
+      run: echo "BUNDLE_GEMFILE=$JOURNAL_ENGINE/Gemfile" >> $GITHUB_ENV
       shell: bash
 
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
-        node-version-file: journal/.nvmrc
+        node-version-file: ${{ inputs.engine }}/.nvmrc
 
     - name: Setup Ruby
       uses: ruby/setup-ruby@v1
@@ -66,7 +83,7 @@ runs:
         ruby -e "
           require 'yaml'
           c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}
-          puts 'JOURNAL_MOUNT=' + c.fetch('publish', 'publish')
+          puts 'JOURNAL_MOUNT=' + c.fetch('journal', 'journal')
           puts 'JOURNAL_BASE=' + c.fetch('journal', 'journal')
         " >> $GITHUB_ENV
       shell: bash
@@ -75,12 +92,12 @@ runs:
       uses: actions/configure-pages@v5
 
     - name: Generate git-history data
-      run: journal/bin/stats.sh
+      run: "$JOURNAL_ENGINE/bin/stats.sh"
       shell: bash
 
     - name: Build with Jekyll
       id: build-latest
-      run: journal/bin/build.sh
+      run: "$JOURNAL_ENGINE/bin/build.sh"
       continue-on-error: ${{ inputs.try_latest == 'true' }}
       shell: bash
 
@@ -88,7 +105,7 @@ runs:
 
     - name: Revert journal to last-known-good
       if: inputs.try_latest == 'true' && steps.build-latest.outcome == 'failure'
-      run: git -C journal checkout "$JOURNAL_LKG_SHA"
+      run: git -C "$JOURNAL_ENGINE" checkout "$JOURNAL_LKG_SHA"
       shell: bash
 
     - name: Reinstall gems for last-known-good Gemfile
@@ -111,12 +128,12 @@ runs:
 
     - name: Regenerate git-history data with last-known-good
       if: inputs.try_latest == 'true' && steps.build-latest.outcome == 'failure'
-      run: journal/bin/stats.sh
+      run: "$JOURNAL_ENGINE/bin/stats.sh"
       shell: bash
 
     - name: Rebuild with last-known-good journal
       if: inputs.try_latest == 'true' && steps.build-latest.outcome == 'failure'
-      run: journal/bin/build.sh
+      run: "$JOURNAL_ENGINE/bin/build.sh"
       shell: bash
 
     # --- record and upload ---

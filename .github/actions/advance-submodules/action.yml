@@ -1,18 +1,24 @@
 name: Advance author submodules to HEAD
 description: >-
-  Advances all publish/* submodule pins in the calling repository to their
-  current HEAD, commits, and pushes to main.
+  Advances all author/content submodule pins under the site's content mount (the
+  `publish` key in _config.yml, default `publish`) to their current HEAD, commits,
+  and pushes to main. The engine submodule lives outside that mount (e.g.
+  .journal-engine) and is advanced separately by advance-engine.
 
 runs:
   using: composite
   steps:
-    - name: Advance all publish/* submodule pins to HEAD
+    - name: Advance content submodule pins to HEAD
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
+        # Content mounts under the `publish` dir (decoupled from the URL base): a
+        # site that overrides it (e.g. publish: journal) advances submodules there.
+        mount=$(ruby -e "require 'yaml'; c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}; print c.fetch('publish', 'publish')")
+
         git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
-          | awk '$2 ~ /^\/publish\//' \
+          | awk -v m="$mount" '$2 ~ ("^" m "/")' \
           | awk '{print $2}' \
           | while read -r path; do
               git submodule update --init "$path"

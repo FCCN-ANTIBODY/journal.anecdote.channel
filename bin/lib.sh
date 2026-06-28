@@ -5,7 +5,7 @@
 #   and OWNER_REL (the file's path relative to that repo). This is what lets the
 #   stats read line history from wherever it lives: content committed directly in
 #   the site repo resolves to the site repo, while content mounted via a submodule
-#   (e.g. publish/<author> -> cite-autumn-ryan) resolves to the submodule, whose
+#   (e.g. journal/<author> -> cite-autumn-ryan) resolves to the submodule, whose
 #   history carries the blame/log the superproject's gitlink cannot.
 
 resolve_owner() {

@@ -7,7 +7,7 @@ set -eu
 BIN="$(cd "$(dirname "$0")" && pwd)"
 . "$BIN/lib.sh"
 
-MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+MOUNT="${JOURNAL_MOUNT:-journal}"     # on-disk mount dir
 BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
 out_root="${JOURNAL_DATA_ROOT:-_data/git}/history"
 mkdir -p "$out_root"

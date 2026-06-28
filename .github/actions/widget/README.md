@@ -33,9 +33,9 @@ Without qrencode the fragment degrades to a plain text link, so a node build nev
 
 ## Use it
 
-In your node's site build (the workspace mounts this engine at `journal/`, the same
-submodule-path convention as `./journal/.github/actions/build`), render the fragment before
-the site build that includes it:
+In your node's site build (the workspace mounts this engine at `.journal-engine/`, the same
+submodule-path convention as `./.journal-engine/.github/actions/build`), render the fragment
+before the site build that includes it:
 
 ```yaml
       - name: Checkout
@@ -43,9 +43,9 @@ the site build that includes it:
         with:
           submodules: recursive
       - name: Render this node's Journal widget
-        uses: ./journal/.github/actions/widget   # reads _config.yml -> widget/journal.html
+        uses: ./.journal-engine/.github/actions/widget   # reads _config.yml -> widget/journal.html
       - name: Build
-        uses: ./journal/.github/actions/build
+        uses: ./.journal-engine/.github/actions/build
 ```
 
 The fragment is written as a **self-contained static file** served at `/widget/journal.html` —
