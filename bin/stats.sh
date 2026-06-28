@@ -5,7 +5,7 @@
 set -euo pipefail
 
 eng="${JOURNAL_ENGINE:-journal}"        # mounted engine path, from the site root
-export JOURNAL_MOUNT="${JOURNAL_MOUNT:-publish}"
+export JOURNAL_MOUNT="${JOURNAL_MOUNT:-journal}"
 export JOURNAL_BASE="${JOURNAL_BASE:-journal}"
 
 # Enumerate pieces on disk (not via git ls-files): a mounted submodule's files

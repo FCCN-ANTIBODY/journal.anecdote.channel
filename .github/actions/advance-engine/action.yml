@@ -1,32 +1,36 @@
 name: Advance journal engine pin
 description: >-
-  Rolls the calling repository's journal/ engine submodule pin forward to the
+  Rolls the calling workspace's .journal-engine submodule pin forward to the
   latest engine HEAD — but only when that latest HEAD still builds the site
   cleanly. Runs the build action with try_latest: true; it reports
   build_mode: latest when the newest journal HEAD built, or falls back to the
   committed (last-known-good) pin otherwise. The new pin is written back
   (commit + push) only when the latest actually built, so a broken engine HEAD
   can never displace the known-good config. This is the engine-side mirror of
-  advance-submodules, which rolls the publish/* author submodules forward.
+  advance-submodules, which rolls the content author submodules forward.
 
 runs:
   using: composite
   steps:
     - name: Build against latest journal
       id: build
-      uses: ./journal/.github/actions/build
+      # The workspace mounts this engine at .journal-engine. A `uses:` path cannot
+      # carry an expression, so the mount is a literal here; the matching `engine`
+      # input is passed through so the build action's own hardcoded refs resolve.
+      uses: ./.journal-engine/.github/actions/build
       with:
         try_latest: true
+        engine: .journal-engine
 
     - name: Roll journal engine pin forward
       if: steps.build.outputs.build_mode == 'latest'
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git -C journal fetch origin main
-        git -C journal checkout "${{ steps.build.outputs.build_sha }}"
-        git diff --quiet journal || {
-          git add journal
+        git -C .journal-engine fetch origin main
+        git -C .journal-engine checkout "${{ steps.build.outputs.build_sha }}"
+        git diff --quiet .journal-engine || {
+          git add .journal-engine
           git commit -m "ci: roll journal forward to ${{ steps.build.outputs.build_sha }} [skip ci]"
           # Race-safe push: a workspace updater may advance the journal/atlas/tell
           # pins in parallel jobs that all push to main. Each job stages only its

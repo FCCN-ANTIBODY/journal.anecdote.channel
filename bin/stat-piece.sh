@@ -8,7 +8,7 @@ BIN="$(cd "$(dirname "$0")" && pwd)"
 . "$BIN/lib.sh"
 
 PIECE_PATH=$1
-MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+MOUNT="${JOURNAL_MOUNT:-journal}"     # on-disk mount dir
 BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
 DATA_ROOT="${JOURNAL_DATA_ROOT:-_data/git}"
 

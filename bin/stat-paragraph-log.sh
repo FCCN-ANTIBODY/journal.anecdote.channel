@@ -6,7 +6,7 @@ set -euo pipefail
 BIN="$(cd "$(dirname "$0")" && pwd)"
 . "$BIN/lib.sh"
 
-file="$1"  # site-root-relative path to the piece (e.g. publish/<author>/<piece>/index.md)
+file="$1"  # site-root-relative path to the piece (e.g. journal/<author>/<piece>/index.md)
 resolve_owner "$file"   # OWNER_REPO / OWNER_REL: where the line history lives
 head_sha="$(git -C "$OWNER_REPO" rev-parse HEAD)"
 printf '{"file":"%s","head":"%s"}\n' "$file" "$head_sha"

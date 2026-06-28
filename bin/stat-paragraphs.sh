@@ -6,7 +6,7 @@ BIN="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(git rev-parse --show-toplevel)"; cd "$repo_root"
 
 src="${1:-}"; [ -n "$src" ] || { echo "usage: $0 <path>"; exit 2; }
-MOUNT="${JOURNAL_MOUNT:-publish}"     # on-disk mount dir
+MOUNT="${JOURNAL_MOUNT:-journal}"     # on-disk mount dir
 BASE="${JOURNAL_BASE:-journal}"       # URL/_data namespace
 DATA_ROOT="${JOURNAL_DATA_ROOT:-_data/git}"
 
