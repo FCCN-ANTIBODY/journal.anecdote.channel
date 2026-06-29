@@ -6,6 +6,24 @@ data:
   git: [blame, paragraphs, history]
 ---
 
+{%- comment -%}
+  Graceful minimalism for placeholders. A page with no `author` — most often a
+  folder stub created through the GitHub UI, whose whole content is `---\n---` —
+  is not a publishable article: it carries none of the fields the body below
+  assumes (author, title, date), and the contact include alone (contact/<author>.md)
+  would collapse to `contact/.md` and fail the build. Treat author-absence as the
+  stub signal, and honor an explicit `stub: true` for the rare placeholder that has
+  inherited an author from a mount default but still should not render as an article.
+  A stub renders as bare content inside the root chrome; it stays noindex by root's
+  default and, lacking an author, never enters the author indexes. Real articles
+  always have an author and fall through to the full layout unchanged.
+{%- endcomment -%}
+{%- assign minimal = page.stub -%}
+{%- unless page.author -%}{%- assign minimal = true -%}{%- endunless -%}
+{%- if minimal -%}
+{{ content }}
+{%- else -%}
+
 {%- comment -%} Contact with explicit md treatment from template {%- endcomment -%}
 {%- capture contact_template -%}
 contact/{{ page.author | slugify }}.md
@@ -74,3 +92,4 @@ contact/{{ page.author | slugify }}.md
   aria-live="polite"
   aria-atomic="true"
   id="quote-live"></div>
+{%- endif -%}
