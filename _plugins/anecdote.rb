@@ -53,6 +53,43 @@ module AnecdoteExhibit
     out
   end
 
+  # ---- folder index (bibliography) ----------------------------------------
+
+  # Render every exhibit JSON in `dir` (an absolute fs path) as one section —
+  # a piece's bibliography, newest capture first — so exhibits need not be
+  # hand-linked one filename at a time. `location` is the URL base the renderer
+  # prepends to a materialised ref's file (default ./exhibits).
+  def render_index(dir, location: "./exhibits", heading: "Exhibits")
+    return "" unless File.directory?(dir)
+    entries = Dir.glob(File.join(dir, "*.json")).filter_map do |path|
+      data = (JSON.parse(File.read(path)) rescue nil)
+      next unless exhibitish?(data)
+      { id: File.basename(path, ".json"), data: data, key: index_key(data) }
+    end
+    return "" if entries.empty?
+    # newest captured first; filename breaks ties (empties sort last in desc)
+    entries.sort! { |a, b| k = b[:key] <=> a[:key]; k.zero? ? (a[:id] <=> b[:id]) : k }
+
+    out = +%(<section class="exhibits" data-count="#{entries.size}">)
+    out << %(\n  <h3 class="exhibits-heading">#{h heading}</h3>) unless heading.to_s.empty?
+    entries.each do |e|
+      out << %(\n  <div class="exhibit-entry" id="exhibit-#{h e[:id]}">\n)
+      out << render(e[:data], location: location)
+      out << %(\n  </div>)
+    end
+    out << %(\n</section>)
+    out
+  end
+
+  def exhibitish?(data)
+    data.is_a?(Hash) && data["schema"].to_s.start_with?("anecdote")
+  end
+
+  # Sort key: the exhibit's captured time; unstamped/bare envelopes sort last.
+  def index_key(data)
+    data["schema"].to_s == "anecdote.exhibit/v1" ? data.dig("provenance", "captured_at").to_s : ""
+  end
+
   # ---- disclosure ---------------------------------------------------------
 
   def derive_disclosure(parts)
@@ -244,4 +281,23 @@ if defined?(Liquid)
   end
 
   Liquid::Template.register_tag("anecdote", AnecdoteTag)
+
+  # {% exhibits %} — render the whole exhibits/ folder as one bibliography.
+  # {% exhibits some/dir %} points at a different page-relative folder.
+  class ExhibitsTag < Liquid::Tag
+    def initialize(tag_name, markup, tokens)
+      super
+      @arg = markup.strip.gsub(/['"]/, "")
+    end
+
+    def render(context)
+      page = context.registers[:page]
+      site = context.registers[:site]
+      base = File.dirname(File.join(site.source, page["path"]))
+      rel  = @arg.empty? ? "exhibits" : @arg
+      AnecdoteExhibit.render_index(File.join(base, rel), location: "./#{rel}")
+    end
+  end
+
+  Liquid::Template.register_tag("exhibits", ExhibitsTag)
 end
