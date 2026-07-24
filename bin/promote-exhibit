@@ -1,0 +1,224 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# promote-exhibit — move a data-pile anecdote into a piece as an exhibit.
+#
+#   bin/promote-exhibit <anecdote.json> --into <piece-dir> [options]
+#
+# Packages an anecdote/v1 envelope into an anecdote.exhibit/v1 file under the
+# piece's exhibits/ folder, materialising each inline-bytes attachment into a
+# durable same-origin file (so the renderer shows ./exhibits/<file>, never a
+# data: URI — the site CSP is img-src 'self'). Refs that carry only a hash +
+# source stay receipts. Then it stamps the provenance the anecdote core drops:
+# origin (atlas = routable / tell = non-routable signer+content-id), the
+# captured time, and the original time when the anecdote was signed.
+#
+# Options
+#   --into DIR         piece directory (required); exhibits go in DIR/exhibits
+#   --slug NAME        exhibit basename (default: slugified label, else digest)
+#   --origin KIND      atlas | tell | private (default: infer from to.kind)
+#   --atlas-url URL    routable origin, for --origin atlas
+#   --signer-kid KID   non-routable signer fingerprint, for --origin tell
+#   --content-id ID    canonical content id (default: sha256 of the envelope)
+#   --original-ts TS   original time (default: read from a signed anecdote)
+#   --captured-at TS   default: today (UTC)
+#   --seal             proof-of-possession only: divulge nothing but the digest
+#   --dry-run          print what would be written; touch nothing
+#
+# The pure core (PromoteExhibit.build) does no I/O and is what test/ drives.
+
+require "json"
+require "digest"
+require "time"
+require_relative "../_plugins/anecdote"  # AnecdoteExhibit.derive_disclosure
+
+module PromoteExhibit
+  module_function
+
+  EXT = {
+    "image/png" => "png", "image/jpeg" => "jpg", "image/jpg" => "jpg",
+    "image/gif" => "gif", "image/webp" => "webp", "image/svg+xml" => "svg",
+    "application/pdf" => "pdf", "text/plain" => "txt", "text/html" => "html",
+    "application/json" => "json",
+  }.freeze
+
+  # Returns { slug:, exhibit: <hash>, files: [{ name:, bytes: <binary String> }] }
+  # Pure: no filesystem, no clock unless caller omits captured_at.
+  def build(anecdote, opts = {})
+    raise ArgumentError, "not an anecdote/v1 envelope" unless anecdote.is_a?(Hash) && anecdote["body"].is_a?(Array)
+
+    anecdote = deep_dup(anecdote)
+    seal     = !!opts[:seal]
+    slug     = (opts[:slug] && !opts[:slug].empty? ? opts[:slug] : nil) ||
+               slugify(text_label(anecdote)) ||
+               "exhibit-#{content_digest(anecdote)[7, 8]}"
+
+    files = []
+    if seal
+      # Divulge nothing: keep identity (to/label) but drop the body entirely.
+      anecdote["body"] = []
+    else
+      anecdote["body"].each_with_index do |part, i|
+        next unless part.is_a?(Hash) && part["kind"] == "ref"
+        b64 = part["bytes"].to_s
+        next if b64.empty?                       # receipt-only ref: leave as-is
+        bytes = (b64.unpack1("m") rescue nil)
+        next if bytes.nil? || bytes.empty?
+        name = "#{slug}-#{i}.#{ext_for(part["mediaType"])}"
+        files << { name: name, bytes: bytes }
+        part.delete("bytes")                     # the file is the durable copy now
+        part["file"] = name
+      end
+    end
+
+    content_id = opts[:content_id] && !opts[:content_id].to_s.empty? ?
+                   opts[:content_id].to_s : content_digest(anecdote_for_id(anecdote, opts))
+    provenance = build_provenance(anecdote, opts, content_id)
+
+    exhibit = { "schema" => "anecdote.exhibit/v1", "anecdote" => anecdote, "provenance" => provenance }
+    exhibit["disclosure"] = seal ? "sealed" : AnecdoteExhibit.derive_disclosure(anecdote["body"])
+    exhibit["proof"] = { "content_id" => content_id } if seal
+
+    { slug: slug, exhibit: exhibit, files: files }
+  end
+
+  # ---- provenance ----------------------------------------------------------
+
+  def build_provenance(anecdote, opts, content_id)
+    kind = (opts[:origin] && !opts[:origin].to_s.empty? ? opts[:origin].to_s : infer_origin(anecdote))
+    prov = { "origin_kind" => kind, "content_id" => content_id }
+    if kind == "atlas"
+      url = opts[:atlas_url].to_s
+      url = anecdote.dig("to", "url").to_s if url.empty?
+      prov["atlas_url"] = url unless url.empty?
+    else
+      kid = opts[:signer_kid].to_s
+      kid = anecdote["agent"].to_s if kid.empty?  # signed anecdotes name their signer
+      prov["signer_kid"] = kid unless kid.empty?
+    end
+    prov["captured_at"] = (opts[:captured_at] && !opts[:captured_at].to_s.empty? ?
+                             opts[:captured_at].to_s : Time.now.utc.strftime("%Y-%m-%d"))
+    ots = opts[:original_ts].to_s
+    ots = signed_time(anecdote) if ots.empty?
+    prov["original_ts"] = ots unless ots.empty?
+    prov
+  end
+
+  def infer_origin(anecdote)
+    anecdote.dig("to", "kind").to_s == "atlas" ? "atlas" : "tell"
+  end
+
+  # A signed anecdote carries time; accept the few plausible field names.
+  def signed_time(anecdote)
+    return "" if anecdote["sig"].to_s.empty?
+    %w[ts time signed_at at].each do |k|
+      v = anecdote[k]
+      return v.to_s unless v.to_s.empty?
+    end
+    ""
+  end
+
+  # ---- helpers -------------------------------------------------------------
+
+  def text_label(anecdote)
+    return anecdote["label"].to_s unless anecdote["label"].to_s.empty?
+    first = anecdote["body"].find { |p| p.is_a?(Hash) && p["kind"] == "text" }
+    first ? first["label"].to_s : ""
+  end
+
+  def ext_for(media)
+    m = media.to_s
+    return EXT[m] if EXT.key?(m)
+    sub = m.split("/", 2)[1].to_s.split("+").first.to_s.gsub(/[^a-z0-9]/i, "")
+    sub.empty? ? "bin" : sub
+  end
+
+  def slugify(str)
+    s = str.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
+    s.empty? ? nil : s[0, 60]
+  end
+
+  # Deterministic digest of the envelope, over canonical (sorted-key) JSON.
+  # NOTE: for ecosystem-wide identity pass --content-id from the pile; this is
+  # a local content-address fallback, honest but not the composer's canon.
+  def content_digest(obj)
+    "sha256:#{Digest::SHA256.hexdigest(canonical(obj))}"
+  end
+
+  # When we compute the id ourselves, do it over the anecdote as received
+  # (before materialisation rewrote bytes->file), so the id names the source.
+  def anecdote_for_id(anecdote, opts)
+    opts[:_original] || anecdote
+  end
+
+  def canonical(obj)
+    case obj
+    when Hash  then "{" + obj.keys.sort.map { |k| "#{k.to_json}:#{canonical(obj[k])}" }.join(",") + "}"
+    when Array then "[" + obj.map { |v| canonical(v) }.join(",") + "]"
+    else obj.to_json
+    end
+  end
+
+  def deep_dup(obj)
+    case obj
+    when Hash  then obj.each_with_object({}) { |(k, v), h| h[k] = deep_dup(v) }
+    when Array then obj.map { |v| deep_dup(v) }
+    else obj
+    end
+  end
+end
+
+# ---- CLI --------------------------------------------------------------------
+if $PROGRAM_NAME == __FILE__
+  require "fileutils"
+
+  args = ARGV.dup
+  src = args.shift
+  abort "usage: bin/promote-exhibit <anecdote.json> --into <piece-dir> [options]" if src.nil? || src.start_with?("--")
+
+  opts = {}
+  into = nil
+  dry = false
+  until args.empty?
+    a = args.shift
+    case a
+    when "--into"        then into = args.shift
+    when "--slug"        then opts[:slug] = args.shift
+    when "--origin"      then opts[:origin] = args.shift
+    when "--atlas-url"   then opts[:atlas_url] = args.shift
+    when "--signer-kid"  then opts[:signer_kid] = args.shift
+    when "--content-id"  then opts[:content_id] = args.shift
+    when "--original-ts" then opts[:original_ts] = args.shift
+    when "--captured-at" then opts[:captured_at] = args.shift
+    when "--seal"        then opts[:seal] = true
+    when "--dry-run"     then dry = true
+    else abort "unknown option: #{a}"
+    end
+  end
+  abort "missing --into <piece-dir>" if into.nil? || into.empty?
+
+  anecdote = JSON.parse(File.read(src))
+  opts[:_original] = anecdote  # id over the source form
+  result = PromoteExhibit.build(anecdote, opts)
+
+  exhibits_dir = File.join(into, "exhibits")
+  json_path = File.join(exhibits_dir, "#{result[:slug]}.json")
+
+  if dry
+    puts "would write #{json_path}"
+    result[:files].each { |f| puts "would write #{File.join(exhibits_dir, f[:name])} (#{f[:bytes].bytesize} bytes)" }
+    puts "disclosure: #{result[:exhibit]['disclosure']}"
+    puts "\n  {% anecdote exhibits/#{result[:slug]}.json %}"
+    exit 0
+  end
+
+  FileUtils.mkdir_p(exhibits_dir)
+  result[:files].each do |f|
+    File.binwrite(File.join(exhibits_dir, f[:name]), f[:bytes])
+  end
+  File.write(json_path, JSON.pretty_generate(result[:exhibit]) + "\n")
+
+  puts "wrote #{json_path} (#{result[:exhibit]['disclosure']})"
+  result[:files].each { |f| puts "wrote #{File.join(exhibits_dir, f[:name])}" }
+  puts "\nAdd to your piece:\n  {% anecdote exhibits/#{result[:slug]}.json %}"
+end
