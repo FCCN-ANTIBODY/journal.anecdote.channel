@@ -27,7 +27,8 @@ the federation lifecycle — it is how a node *publishes*, not how it federates.
 
 Capability is migrating off GitHub and down to the operator's device (the anecdote.channel PWA —
 which even carries `jekyll-enough/`, a vendorless in-browser counterpart to this build). The
-composite actions here (`build`, `advance-engine`, `advance-submodules`, `widget`) are being
+composite actions here (`build`, `build-intermediates`, `advance-engine`, `advance-submodules`,
+`widget`) are being
 **kept as a declarative definition of the publish pipeline** — a configuration input an operator
 or the offline origin can read and mirror — not as the presumed runtime. Support them; don't
 deepen reliance on them.
@@ -53,5 +54,14 @@ deepen reliance on them.
 `bin/build.sh` / `bin/serve.sh` / `bin/sync.sh` (engine-asset sync into a site root),
 `bin/stats.sh` + `bin/stat-*` (per-piece git-history `_data` generation), `_plugins/antibody.rb`
 (internal-url data keys, soft link-downgrade), `_plugins/piece-citation.rb` (`{% raw_include %}`),
-and the composite actions `build` (with `try_latest` + last-known-good fallback),
-`advance-engine`, `advance-submodules`, `widget`.
+`bin/build-intermediates` (the portable form of what a journal has cut — arrangement and
+recorded pins, never prose), and the composite actions `build` (with `try_latest` +
+last-known-good fallback), `build-intermediates`, `advance-engine`, `advance-submodules`,
+`widget`.
+
+`build-intermediates` is the clearest example of the glove: the action writes into the
+repository wearing it, never into this one, and what it emits is INERT — front matter plus
+plain markdown, no template syntax — so a consumer needs to trust nothing to render it.
+The one rule it must never lose is that it reads issue front matter and submodule pins and
+never a piece's body: prose committed into an area would outlive a squash of the author's
+own repository, and the withdrawal promise rests on it not doing that.

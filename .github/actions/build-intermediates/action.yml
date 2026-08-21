@@ -1,0 +1,94 @@
+name: Build journal intermediates
+description: >-
+  Builds the portable form of what a journal has cut — one inert markdown file per issue,
+  plus a stable entry point — and writes it back into the repository that called this, never
+  into the engine. An outer site that mounts this journal reads those files and never has to
+  know how this journal arrived at them, which is what leaves an area free to use its own
+  plugins and its own layouts on the way to deciding what an issue is.
+
+  What is written is the ARRANGEMENT and never the prose. A contributor's words living in an
+  area's history would outlive a squash of their own repository, so the tool reads issue
+  front matter and recorded submodule pins, and never opens a piece's body.
+
+inputs:
+  engine:
+    description: >-
+      On-disk path this engine is mounted at, relative to the site root. Defaults to
+      `.journal-engine`, the engine's own convention.
+    required: false
+    default: '.journal-engine'
+  issues:
+    description: Directory the baked issue files live in, relative to the site root.
+    required: false
+    default: 'issues'
+  out:
+    description: >-
+      Directory the intermediates are written to. This is the address an outer site reads,
+      so it is a contract rather than a preference — change it and every consumer must be
+      told.
+    required: false
+    default: '_intermediates'
+  journal:
+    description: >-
+      Content mount, if the site does not use the engine's `journal` config value. A cited
+      url `/journal/beat/piece/` resolves to `journal/beat/piece` on disk.
+    required: false
+    default: ''
+  commit:
+    description: >-
+      Write the result back to the calling repository. Left false, the files are built and
+      left in the workspace for a later step to inspect or deploy.
+    required: false
+    default: 'true'
+  message:
+    description: Commit subject used when writing back.
+    required: false
+    default: 'Rebuild journal intermediates'
+
+outputs:
+  changed:
+    description: "'true' when the build produced a difference that was committed"
+    value: ${{ steps.write.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build intermediates
+      # The pin a piece is cited at is read from the TREE, so the submodules themselves do
+      # not need to be fetched for this step to be correct — and deliberately are not, since
+      # nothing here should have a contributor's prose within reach.
+      run: |
+        args=""
+        [ -n "${{ inputs.issues }}" ]  && args="$args --issues ${{ inputs.issues }}"
+        [ -n "${{ inputs.out }}" ]     && args="$args --out ${{ inputs.out }}"
+        [ -n "${{ inputs.journal }}" ] && args="$args --journal ${{ inputs.journal }}"
+        ruby "${{ inputs.engine }}/bin/build-intermediates" $args
+      shell: bash
+
+    - name: Write back
+      id: write
+      # The glove: an engine action writes into whoever is wearing it, never into the engine.
+      # That write is to this repository alone, so the job's own GITHUB_TOKEN is enough and no
+      # cross-repository credential is involved.
+      #
+      # `[skip ci]` is not decoration. Without it this commit triggers the push event that ran
+      # this workflow, which rebuilds and commits again, forever.
+      run: |
+        if [ "${{ inputs.commit }}" != "true" ]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "commit disabled — intermediates left in the workspace"
+          exit 0
+        fi
+        git add -- "${{ inputs.out }}"
+        if git diff --cached --quiet; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "intermediates unchanged; nothing to write"
+          exit 0
+        fi
+        git config user.name  "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -q -m "${{ inputs.message }} [skip ci]"
+        git push
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+        echo "intermediates updated"
+      shell: bash

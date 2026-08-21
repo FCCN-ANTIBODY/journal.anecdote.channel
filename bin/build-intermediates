@@ -1,0 +1,178 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Build a journal's INTERMEDIATES — the portable form of what it has cut, for whoever
+# publishes it.
+#
+# WHAT AN INTERMEDIATE IS FOR. An outer site that mounts this journal must not have to know
+# how this journal runs its shop. An area is free to reach for its own plugins and its own
+# esoteric layouts on the way to deciding what an issue is; what it hands upward has to be
+# something anything can read. So this writes an INERT artifact: front matter plus plain
+# markdown, no template syntax at all. Nothing needs to be trusted to render it, and the
+# JavaScript client reads it as readily as Jekyll does.
+#
+# WHAT IT MUST NEVER CONTAIN IS PROSE. What is baked here is the ARRANGEMENT — which pieces
+# ran, under what headline, by whom — and never the letters themselves. That is not tidiness:
+# a contributor's words living in this repository would survive a squash of their own, and
+# the whole withdrawal promise rests on them not doing that. This script therefore never
+# opens a piece's body. It reads the issue's own front matter and the recorded submodule
+# pins, and nothing else.
+#
+# THE PIN IS THE POINT. Each piece is recorded with the commit its submodule is pinned at,
+# read from the tree rather than the working checkout. That single field does three jobs:
+# it says which exact words ran, so a third party's rendering is checkable against ours; it
+# makes staleness visible when an outer build picks up an intermediate older than its
+# source; and it is the same pin that makes publishing, editing, and withdrawal one
+# mechanism rather than three.
+#
+# Run from the SITE root — the repo wearing the glove, never this engine.
+#
+#   bin/build-intermediates [--issues DIR] [--out DIR] [--journal DIR]
+
+require "yaml"
+require "date"
+require "fileutils"
+require "shellwords"
+
+opts = { issues: "issues", out: "_intermediates", journal: nil }
+args = ARGV.dup
+until args.empty?
+  case (a = args.shift)
+  when "--issues"  then opts[:issues]  = args.shift
+  when "--out"     then opts[:out]     = args.shift
+  when "--journal" then opts[:journal] = args.shift
+  when "--help", "-h"
+    puts File.read(__FILE__).lines.grep(/^#/).join
+    exit 0
+  else
+    abort "build-intermediates: unknown argument #{a}"
+  end
+end
+
+def site_config
+  File.exist?("_config.yml") ? (YAML.safe_load(File.read("_config.yml"), permitted_classes: [Date]) || {}) : {}
+rescue Psych::Exception
+  {}
+end
+
+config = site_config
+mount = opts[:journal] || config["journal"] || "journal"
+area  = config["civic_node"].to_s
+title = config["title"].to_s
+
+# An issue is keyed by the PERIOD IT COVERS. The day it was cut is a separate fact and
+# travels in `cut:`, so an identifier never has to stand in for a claim.
+ISSUE_KEY = /\A(\d{4}-\d{2})\.md\z/
+
+def front_matter(path)
+  src = File.read(path)
+  m = /\A---\r?\n(.*?)\r?\n---\r?\n?/m.match(src)
+  return {} unless m
+
+  YAML.safe_load(m[1], permitted_classes: [Date]) || {}
+rescue Psych::Exception => e
+  warn "build-intermediates: #{path}: unreadable front matter (#{e.message})"
+  {}
+end
+
+# The commit a path is pinned at, read from the TREE rather than the working checkout — the
+# recorded pin is the citation, and a dirty checkout must not be able to change what we say
+# ran. Returns nil when the path is not a pinned submodule.
+def pinned_commit(path)
+  out = `git ls-tree HEAD -- #{path.shellescape} 2>/dev/null`
+  return nil if out.strip.empty?
+
+  mode, type, sha, _ = out.split
+  (mode == "160000" && type == "commit") ? sha : nil
+end
+
+def submodule_url(path)
+  url = `git config --file .gitmodules --get submodule.#{path.shellescape}.url 2>/dev/null`.strip
+  url.empty? ? nil : url
+end
+
+# A cited url is a URL-space fact; the on-disk path is ours. `/journal/beat/piece/` sits at
+# `journal/beat/piece` because this engine mounts content where it serves it.
+def path_for(url, mount)
+  rel = url.to_s.sub(%r{\A/}, "").sub(%r{/\z}, "")
+  rel = rel.sub(%r{\A#{Regexp.escape(mount)}/}, "")
+  rel.empty? ? nil : File.join(mount, rel)
+end
+
+FileUtils.mkdir_p(opts[:out])
+
+issue_files = Dir.children(opts[:issues]).select { |f| ISSUE_KEY.match?(f) }.sort
+if issue_files.empty?
+  warn "build-intermediates: no issues in #{opts[:issues]}/ — nothing to hand upward yet"
+end
+
+built = []
+issue_files.each do |file|
+  key = ISSUE_KEY.match(file)[1]
+  data = front_matter(File.join(opts[:issues], file))
+
+  pieces = Array(data["pieces"]).map do |entry|
+    url = entry["url"].to_s
+    path = path_for(url, mount)
+    sha = path ? pinned_commit(path) : nil
+    {
+      "url" => url,
+      "title" => entry["title"].to_s,
+      "author" => entry["author"].to_s,
+      # `source` absent means the citation is not pinned here any more — a withdrawal seen
+      # from upstream. The consumer renders it as withdrawn rather than dropping it, because
+      # an issue that quietly loses a letter misrepresents its own history.
+      "source" => sha,
+      "source_repo" => path ? submodule_url(path) : nil
+    }.compact
+  end
+
+  meta = {
+    "issue" => key,
+    "title" => data["title"].to_s.empty? ? "#{title} — #{key}" : data["title"].to_s,
+    "area" => area,
+    "cut" => data["cut"].to_s,
+    "layout" => data["layout"].to_s.empty? ? nil : data["layout"].to_s,
+    "pieces" => pieces
+  }.compact
+
+  # The body is a plain list and nothing else: an inert rendering of the same arrangement,
+  # so a reader with no build at all still sees what ran.
+  body = pieces.map do |p|
+    line = +"- [#{p['title']}](#{p['url']})"
+    line << " — #{p['author']}" unless p["author"].to_s.empty?
+    line << " *(withdrawn)*" unless p["source"]
+    line
+  end.join("\n")
+  body = "*No letters ran in this issue.*" if body.empty?
+
+  File.write(File.join(opts[:out], "#{key}.md"), "#{meta.to_yaml}---\n\n#{body}\n")
+  built << key
+  puts "  #{key}  #{pieces.size} piece(s), #{pieces.count { |p| p['source'] }} pinned"
+end
+
+# The entry point: a light indirection to the newest issue that has been cut. A consumer asks
+# for one stable address and never has to know this journal's cut dates or numbering. It is
+# an indirection rather than a copy so that an issue has exactly one rendering — the one it
+# was cut with — and a redesign years from now cannot quietly turn a past issue into
+# something it never was.
+latest = built.last
+entry = {
+  "entry_point" => true,
+  "area" => area,
+  "issue" => latest,
+  "title" => latest ? "#{title} — current issue" : "#{title} — no issue yet"
+}.compact
+entry_body = latest ? "The current issue is [#{latest}](#{latest}.md)." : "*No issue has been cut yet.*"
+File.write(File.join(opts[:out], "current.md"), "#{entry.to_yaml}---\n\n#{entry_body}\n")
+
+# An intermediate is INERT. Anything that has to be rendered to be safe is not portable, and
+# the failure would be silent — a blank page rather than an error. Cheaper to refuse here.
+offenders = Dir.glob(File.join(opts[:out], "*.md")).select { |f| File.read(f).match?(/\{\{|\{%/) }
+unless offenders.empty?
+  warn "build-intermediates: template syntax in an intermediate, which must be inert:"
+  offenders.each { |f| warn "  #{f}" }
+  exit 1
+end
+
+puts "build-intermediates: #{built.size} issue(s) + entry point -> #{opts[:out]}/"
