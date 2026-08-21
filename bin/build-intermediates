@@ -11,12 +11,17 @@
 # markdown, no template syntax at all. Nothing needs to be trusted to render it, and the
 # JavaScript client reads it as readily as Jekyll does.
 #
-# WHAT IT MUST NEVER CONTAIN IS PROSE. What is baked here is the ARRANGEMENT — which pieces
-# ran, under what headline, by whom — and never the letters themselves. That is not tidiness:
-# a contributor's words living in this repository would survive a squash of their own, and
-# the whole withdrawal promise rests on them not doing that. This script therefore never
-# opens a piece's body. It reads the issue's own front matter and the recorded submodule
-# pins, and nothing else.
+# IT CARRIES THE PIECES TOO. The outer site bakes the issues, and to do that it has to see
+# the letters — so each cited piece is written out beside the arrangement, at the path its url
+# already names. This is a PREBUILT ARTIFACT that stays in this repository: the text has not
+# left the network it was already in, it is simply here in a form something else can read
+# without knowing how this journal is built.
+#
+# What travels is the piece reduced: its OWN front matter (title, author, date, tags — the
+# keys that describe the piece and travel with it anywhere) and its body. What is dropped are
+# the CLAIMS ON A URL SPACE — redirect_from, redirect_to, permalink — which belong to whichever
+# site first published the piece and are meaningless anywhere else. Nothing here was ever
+# moved, so there is nothing to redirect.
 #
 # THE PIN IS THE POINT. Each piece is recorded with the commit its submodule is pinned at,
 # read from the tree rather than the working checkout. That single field does three jobs:
@@ -99,6 +104,36 @@ def path_for(url, mount)
   rel.empty? ? nil : File.join(mount, rel)
 end
 
+# Front matter keys that are CLAIMS ON A URL SPACE rather than descriptions of a piece. They
+# belong to whichever site first published it; a mounting site never had those addresses, so
+# honouring them would mint pages at another site's URLs — and two journals citing the same
+# piece would both claim the same ones.
+URL_CLAIMS = %w[redirect_from redirect_to permalink].freeze
+
+# Write one cited piece into the artifact, at the path its url already names, so the tier above
+# can copy the tree straight into its own served space.
+def write_piece(url, path, out)
+  src = File.join(path, "index.md")
+  return warn("  #{url}: no index.md in the pin; not carried") unless File.exist?(src)
+
+  raw = File.read(src)
+  m = /\A---\r?\n(.*?)\r?\n---\r?\n?/m.match(raw)
+  front = m ? (YAML.safe_load(m[1], permitted_classes: [Date]) || {}) : {}
+  body = m ? raw[m[0].length..] : raw
+
+  URL_CLAIMS.each { |k| front.delete(k) }
+  # The mounting site decides the layout. A piece must not have to know who is publishing it.
+  front.delete("layout")
+
+  dest = File.join(out, url.sub(%r{\A/}, "").sub(%r{/\z}, ""), "index.md")
+  FileUtils.mkdir_p(File.dirname(dest))
+  File.write(dest, "#{front.to_yaml}---\n\n#{body.sub(/\A\n+/, "")}")
+
+  # Liquid in a piece is allowed — these are Jekyll markdown sources and may carry it — but it
+  # is worth saying out loud, because whatever is left has to render wherever this is mounted.
+  warn "  #{url}: carries template syntax; it must render where this is mounted" if body.match?(/\{\{|\{%/)
+end
+
 FileUtils.mkdir_p(opts[:out])
 
 issue_files = Dir.children(opts[:issues]).select { |f| ISSUE_KEY.match?(f) }.sort
@@ -115,6 +150,7 @@ issue_files.each do |file|
     url = entry["url"].to_s
     path = path_for(url, mount)
     sha = path ? pinned_commit(path) : nil
+    write_piece(url, path, opts[:out]) if path && sha
     {
       "url" => url,
       "title" => entry["title"].to_s,
@@ -168,6 +204,10 @@ File.write(File.join(opts[:out], "current.md"), "#{entry.to_yaml}---\n\n#{entry_
 
 # An intermediate is INERT. Anything that has to be rendered to be safe is not portable, and
 # the failure would be silent — a blank page rather than an error. Cheaper to refuse here.
+# The files this tool AUTHORS must be inert — anything that has to be rendered to be safe is
+# not portable, and the failure would be a blank page rather than an error. A carried piece is
+# not one of those: it is a contributor's Jekyll source and may legitimately hold Liquid, which
+# is warned about above rather than refused here.
 offenders = Dir.glob(File.join(opts[:out], "*.md")).select { |f| File.read(f).match?(/\{\{|\{%/) }
 unless offenders.empty?
   warn "build-intermediates: template syntax in an intermediate, which must be inert:"
