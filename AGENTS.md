@@ -62,6 +62,9 @@ last-known-good fallback), `build-intermediates`, `advance-engine`, `advance-sub
 `build-intermediates` is the clearest example of the glove: the action writes into the
 repository wearing it, never into this one, and what it emits is INERT — front matter plus
 plain markdown, no template syntax — so a consumer needs to trust nothing to render it.
-The one rule it must never lose is that it reads issue front matter and submodule pins and
-never a piece's body: prose committed into an area would outlive a squash of the author's
-own repository, and the withdrawal promise rests on it not doing that.
+It carries the cited pieces as well as the arrangement, because the tier above bakes the
+issues and has to see the letters. A carried piece is reduced: the keys that DESCRIBE it
+travel (title, author, date, tags) and the claims on a URL SPACE do not (permalink,
+redirect_from, redirect_to), because those belong to whichever site first published it and
+nothing was ever moved. The layout goes too — a piece must not have to know who is
+publishing it.

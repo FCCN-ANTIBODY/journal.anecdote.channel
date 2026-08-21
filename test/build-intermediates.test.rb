@@ -52,6 +52,23 @@ def build(issues:)
     system("git add -A", exception: true)
     system("git update-index --add --cacheinfo 160000,#{PINNED_SHA},journal/beat/pinned", exception: true)
     system("git commit -q -m fixture", exception: true)
+    # the pin is what the TREE records; the working copy is what a checked-out submodule looks
+    # like on disk. Both, because the tool reads one for provenance and the other for prose.
+    FileUtils.mkdir_p("journal/beat/pinned")
+    File.write("journal/beat/pinned/index.md", <<~PIECE)
+      ---
+      title: A letter that ran
+      author: Author One
+      date: 2026-08-02
+      tags: [buses, schedules]
+      layout: whatever-their-site-used
+      permalink: /their/old/address/
+      redirect_from:
+        - /older/still/
+      ---
+
+      #{PROSE}
+    PIECE
 
     out = `ruby #{TOOL.inspect} 2>&1`
     [dir, out, $?.exitstatus]
@@ -96,9 +113,30 @@ Dir.chdir(dir) do
   ok("an unpinned piece carries no source — that is what withdrawn looks like") { !gone.key?("source") }
   ok("the inert body marks it withdrawn") { File.read("_intermediates/2026-08.md").include?("*(withdrawn)*") }
 
-  # The load-bearing one.
-  leaked = Dir.glob("_intermediates/*").select { |f| File.read(f).include?(PROSE) }
-  ok("NO PROSE reaches an intermediate — not the piece's, not the issue's body") { leaked.empty? }
+  # The arrangement files this tool AUTHORS carry no prose: an issue names its pieces, it does
+  # not contain them. The pieces themselves are carried separately, below.
+  authored = ["_intermediates/2026-08.md", "_intermediates/current.md"]
+  ok("the arrangement names its pieces and does not contain them") do
+    authored.none? { |f| File.read(f).include?(PROSE) }
+  end
+
+  # ---- the pieces, carried at the path their url already names -----------------------------
+  carried = "_intermediates/journal/beat/pinned/index.md"
+  ok("a pinned piece is carried at the path its url names") { File.exist?(carried) }
+  if File.exist?(carried)
+    text = File.read(carried)
+    fm = front_matter(carried)
+    ok("the piece's prose travels") { text.include?(PROSE) }
+    ok("keys that DESCRIBE the piece travel with it") do
+      fm["title"] == "A letter that ran" && fm["author"] == "Author One" &&
+        fm["date"].to_s == "2026-08-02" && fm["tags"] == %w[buses schedules]
+    end
+    ok("claims on a url space are dropped — nothing here was ever moved") do
+      !fm.key?("permalink") && !fm.key?("redirect_from") && !fm.key?("redirect_to")
+    end
+    ok("the layout is dropped — a piece must not know who is publishing it") { !fm.key?("layout") }
+  end
+  ok("an unpinned piece is not carried") { !File.exist?("_intermediates/journal/beat/unpinned/index.md") }
 
   entry = front_matter("_intermediates/current.md")
   ok("the entry point indirects to the newest issue") { entry["issue"] == "2026-08" && entry["entry_point"] }
