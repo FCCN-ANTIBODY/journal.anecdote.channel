@@ -29,7 +29,22 @@ id: ""
 # already states one in its <title>. Fill it only if the title is unusable as a name.
 name: ""
 
-# This site's own domain, once it has one.
+# WHERE THIS BRANCH BELONGS — the canonical name this build is meant to be reached at. Not a
+# convenience field: it is the site's own claim about its address, and it is what lets a directory
+# stop asking a code host where something lives. A host-specific API answer (GitHub's homepage
+# field, say) is an accident of where the repo happens to sit today; this is the site speaking.
+#
+# It is per-branch content, which is the whole point. One repository serving several places
+# branches per destination and each branch names its own — so the number of branches IS the number
+# of nodes, disclosed rather than inferred. A push carrying a branch addressed somewhere else is
+# mail for another party, and a node SHALL NOT deploy it. (Declining mail addressed elsewhere is
+# not blocking a submission; the sender still learns the outcome.)
+#
+# The same shape the constellation already uses to introduce itself: a Tell registers with an
+# Atlas on a `tell/<scope>/<id>` branch, where the branch name carries the destination. This is
+# that idiom applied to deployment instead of registration.
+#
+# Empty is fine and honest: a site that has not claimed a name is still a journal.
 url: ""
 
 # Where the prose lives, relative to the site root. The engine's contract is disk path == URL
