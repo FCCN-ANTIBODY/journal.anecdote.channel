@@ -35,6 +35,14 @@ deepen reliance on them.
 
 ## Where intuition goes wrong here
 
+- **Assets here are named for their OWNER, not their location.** `css/engine.css` was
+  `css/site.css`, which read as *the mounting site's* stylesheet and is the opposite of what
+  it is. A node that opens its built output and sees `engine.css` knows immediately whose it
+  is, and that declining to load it is a choice rather than a mistake. The same trap is still
+  set by the directory names — `css/`, `js/`, `fonts/`, `img/` sit at a mounting site's root
+  under names that claim to be the site's, and a node's `.gitignore` written against them will
+  swallow the site's own. That one has already happened.
+
 - **This is an engine, not a site.** There is no `.github/workflows/` here on purpose — mounting
   nodes `uses:` the composite actions. There is also no README; the excludes in `_config.yml`
   anticipate a mounting site's files.
