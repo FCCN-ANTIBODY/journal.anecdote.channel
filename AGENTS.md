@@ -68,3 +68,11 @@ travel (title, author, date, tags) and the claims on a URL SPACE do not (permali
 redirect_from, redirect_to), because those belong to whichever site first published it and
 nothing was ever moved. The layout goes too — a piece must not have to know who is
 publishing it.
+
+A carried piece may contain NO template syntax, and `build-intermediates` refuses rather than
+warns. This is not about portability. A mounting site evaluates what it is handed, so a
+piece's `{% include %}` would run in THAT site's build, against ITS includes, ITS plugins and
+ITS filesystem, before anything is served — which puts it out of reach of any content policy,
+because no browser is involved. A contributor writes the letter; they do not get to run a step
+in the newsroom's build. Refusing at ejection is the gate doing its job: an editor is present
+in the author's own repository, and nobody is present at the tier above.
