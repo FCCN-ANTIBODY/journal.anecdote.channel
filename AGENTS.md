@@ -7,6 +7,18 @@ mounting site supplies content under `journal/`, where disk path == URL path, an
 enriches each piece with per-paragraph git history generated into `_data/`. It carries no role in
 the federation lifecycle — it is how a node *publishes*, not how it federates.
 
+## The role declares itself
+
+`skel/journal.yml` is synced to every mounting site's root, so a journal says what it is at a
+fetchable path — the same shape and the same place as a node's `atlas.yml`, `tell.yml` and
+`antidote.yml`. Before it, a journal was the only role indistinguishable from any static site on
+the wire, and anything cataloguing the constellation had to guess: sniff the markup, or be told
+out of band by a human keeping a list. Both compute an answer the node should declare.
+
+The roles are not exclusive — a civic node self-hosting several publishes several of these files,
+and that is the honest description of it. Nothing reads `journal.yml` to decide access; it is a
+statement of what a site is, not a permission, and a reader may disbelieve it.
+
 ## Where the truth is, in reading order
 
 1. **Demos before docs.** The constellation's capability index is the demo shelf in

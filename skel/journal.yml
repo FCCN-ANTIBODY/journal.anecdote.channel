@@ -1,0 +1,37 @@
+# Public identity of THIS site acting as a Journal — the role's self-declaration, in the same
+# shape and the same place as a node's atlas.yml, tell.yml and antidote.yml. Public face; no
+# secrets.
+#
+# WHY THIS FILE EXISTS. The other three roles each say what they are at a fetchable path, and a
+# journal was the one that did not: a journal site was indistinguishable from any static site on
+# the wire, so anything cataloguing the constellation had to GUESS — sniff the markup, or be told
+# out of band by a human keeping a list. Both are computing an answer the node should simply
+# declare. "Declared, never computed" is the rule the archivist already runs on, and attesting
+# before you run is invariant 6; this is that rule applied to saying what you are.
+#
+# It is synced in from the engine by bin/sync.sh like the rest of skel/, so every mounting site
+# publishes it without doing anything. A site that wants to say more shadows it: commit its own
+# journal.yml and add --exclude='journal.yml' to the rsync in bin/sync.sh.
+#
+# Nothing reads this to decide ACCESS. It is a statement of what this site is, not a permission,
+# and a reader is free to disbelieve it — the same standing as every other public face here.
+
+# The role this site fills. A node self-hosting several roles publishes several of these files;
+# they are not exclusive, and a civic node legitimately serves atlas.yml, antidote.yml and this
+# one at once.
+role: journal
+
+# Stable slug for this journal. Defaults empty — a site that has not set one is still a journal,
+# and the fact of the file is what carries that.
+id: ""
+
+# Human-readable label. Left empty on purpose: a name belongs to the thing itself, and this site
+# already states one in its <title>. Fill it only if the title is unusable as a name.
+name: ""
+
+# This site's own domain, once it has one.
+url: ""
+
+# Where the prose lives, relative to the site root. The engine's contract is disk path == URL
+# path, so this is both.
+content: journal/
