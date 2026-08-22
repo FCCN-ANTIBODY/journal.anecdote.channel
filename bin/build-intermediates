@@ -125,13 +125,33 @@ def write_piece(url, path, out)
   # The mounting site decides the layout. A piece must not have to know who is publishing it.
   front.delete("layout")
 
+  # A CARRIED PIECE MAY NOT CONTAIN TEMPLATE SYNTAX, and this refuses rather than warns.
+  #
+  # Not for portability — for what the syntax can reach. A mounting site builds what it is
+  # handed, and a piece's `{% include %}`, `{% raw_include %}` or any other tag is evaluated in
+  # THAT site's build, against ITS includes, ITS plugins, ITS filesystem. A contributor writes
+  # the letter; they do not get to run a step in the newsroom's build. No browser is involved,
+  # so no content policy reaches this: it happens before anything is served.
+  #
+  # This is the ejection gate doing its job. A piece is worked on in its author's own
+  # repository and ejected when it is ready; template syntax in an ejected piece is something
+  # an editor fixes there, where an editor is present, rather than something the tier above
+  # discovers unattended. Failing here is the whole point — the alternative is carrying it and
+  # hoping whoever mounts it is careful.
+  if (found = body.scan(/\{\{[^}]*\}\}|\{%-?\s*\w+/).uniq.first(3)).any?
+    abort <<~REFUSED
+      build-intermediates: refusing to carry #{url}
+        It contains template syntax: #{found.join(", ")}
+        A mounting site evaluates that in ITS build, against ITS includes and plugins. Remove it
+        from the piece — a letter is prose, and anything it needs rendering is the journal's to
+        render around it.
+    REFUSED
+  end
+
   dest = File.join(out, url.sub(%r{\A/}, "").sub(%r{/\z}, ""), "index.md")
   FileUtils.mkdir_p(File.dirname(dest))
   File.write(dest, "#{front.to_yaml}---\n\n#{body.sub(/\A\n+/, "")}")
 
-  # Liquid in a piece is allowed — these are Jekyll markdown sources and may carry it — but it
-  # is worth saying out loud, because whatever is left has to render wherever this is mounted.
-  warn "  #{url}: carries template syntax; it must render where this is mounted" if body.match?(/\{\{|\{%/)
 end
 
 FileUtils.mkdir_p(opts[:out])

@@ -162,6 +162,43 @@ Dir.chdir(dir2) do
 end
 FileUtils.remove_entry(dir2)
 
+# A piece may not smuggle template syntax into a mounting site's BUILD. Nothing about a browser
+# reaches this: the tag would be evaluated by whoever mounts the piece, against their includes
+# and their plugins, before anything is served.
+begin
+  dir3 = Dir.mktmpdir("intermediates-hostile-")
+  out = nil
+  Dir.chdir(dir3) do
+    system("git init -q -b main && git config user.email t@t && git config user.name t", exception: true)
+    File.write("_config.yml", "title: Test Area\ncivic_node: Test Area\njournal: journal\n")
+    File.write(".gitmodules", "[submodule \"journal/beat/pinned\"]\n\tpath = journal/beat/pinned\n\turl = https://example.invalid/p\n")
+    FileUtils.mkdir_p("issues")
+    File.write("issues/2026-08.md", <<~MD)
+      ---
+      title: "Test Area — 2026-08"
+      cut: 2026-08-18
+      pieces:
+        - url: "/journal/beat/pinned/"
+          title: "A letter with a tag in it"
+          author: "Author One"
+      ---
+    MD
+    system("git add -A", exception: true)
+    system("git update-index --add --cacheinfo 160000,#{PINNED_SHA},journal/beat/pinned", exception: true)
+    system("git commit -q -m fixture", exception: true)
+    FileUtils.mkdir_p("journal/beat/pinned")
+    File.write("journal/beat/pinned/index.md", "---\ntitle: Tagged\n---\n\n{% include contact/someone.md %}\n")
+    out = `ruby #{TOOL.inspect} 2>&1`
+    $hostile_status = $?.exitstatus
+  end
+  ok("a piece carrying template syntax is REFUSED, not carried") { $hostile_status != 0 }
+  ok("the refusal names the piece and what it found") do
+    out.include?("/journal/beat/pinned/") && out.include?("{% include")
+  end
+  ok("nothing was written for it") { !File.exist?(File.join(dir3, "_intermediates", "journal", "beat", "pinned", "index.md")) }
+  FileUtils.remove_entry(dir3)
+end
+
 puts "\n#{$pass} passed, #{$fail} failed"
 if $fail.zero?
   puts "ALL TESTS PASSED"
