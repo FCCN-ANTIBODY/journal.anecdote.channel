@@ -32,6 +32,9 @@ defaults:
       layout: journal
 
 exclude:
+  # NAME is deliberately NOT excluded: it is the site's published claim about where it belongs,
+  # and a claim nobody can fetch is not a claim. CNAME stays excluded — it is the host's
+  # deployment plumbing, not a statement the site is making.
   - CNAME
   - .bundle
   - Gemfile

@@ -7,6 +7,28 @@ mounting site supplies content under `journal/`, where disk path == URL path, an
 enriches each piece with per-paragraph git history generated into `_data/`. It carries no role in
 the federation lifecycle — it is how a node *publishes*, not how it federates.
 
+## NAME — where a site says it belongs
+
+`/NAME` at a site root is one line, no scheme, no trailing slash: the canonical name that build is
+meant to be reached at.
+
+    antibody.fort-collins.colorado.anecdote.channel
+
+It is deliberately NOT `CNAME`. A CNAME asserts one host is an alias of another; **canonical here
+means a proven copy, not the only copy.** The same branch may legitimately be mirrored to a
+different apex, and both are canonical because both are provably the same bytes — a claim CNAME's
+meaning cannot carry. Truncating the C is the signal: same shape, different promise, and plain to a
+reader who has never heard of either.
+
+It is **site-owned, not engine-owned**, so it is not in `skel/` and `bin/sync.sh` will never write
+or overwrite it. An address belongs to the site, not to any role it fills: a node running no Atlas
+still has one, and a node running three roles has one address rather than three that can disagree.
+That is why `url:` came out of the role declarations.
+
+It is per-branch content. One repository serving several places branches per destination and each
+branch carries its own NAME, so the number of branches is the number of nodes — disclosed rather
+than inferred. A push whose NAME is addressed elsewhere is mail for another party.
+
 ## The role declares itself
 
 `skel/journal.yml` is synced to every mounting site's root, so a journal says what it is at a

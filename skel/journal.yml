@@ -29,8 +29,11 @@ id: ""
 # already states one in its <title>. Fill it only if the title is unusable as a name.
 name: ""
 
-# This site's own domain, once it has one.
-url: ""
+# This file does NOT carry the site's address. That lives in /NAME at the repository root — one
+# line, no scheme — because an address is a property of the SITE, not of any role it fills. A node
+# running no Atlas still has one; a node running three roles has one address rather than three that
+# can disagree. Putting it here would make every engine a co-owner of the same fact, which is how
+# facts drift. See NAME, and this engine's AGENTS.md.
 
 # Where the prose lives, relative to the site root. The engine's contract is disk path == URL
 # path, so this is both.
