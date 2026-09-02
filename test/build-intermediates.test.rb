@@ -190,12 +190,24 @@ begin
     File.write("journal/beat/pinned/index.md", "---\ntitle: Tagged\n---\n\n{% include contact/someone.md %}\n")
     out = `ruby #{TOOL.inspect} 2>&1`
     $hostile_status = $?.exitstatus
+    $strict_out = `ruby #{TOOL.inspect} --strict 2>&1`
+    $strict_status = $?.exitstatus
   end
-  ok("a piece carrying template syntax is REFUSED, not carried") { $hostile_status != 0 }
+  # The security property: a piece carrying template syntax is never carried, in either mode.
+  ok("nothing was written for it") { !File.exist?(File.join(dir3, "_intermediates", "journal", "beat", "pinned", "index.md")) }
   ok("the refusal names the piece and what it found") do
     out.include?("/journal/beat/pinned/") && out.include?("{% include")
   end
-  ok("nothing was written for it") { !File.exist?(File.join(dir3, "_intermediates", "journal", "beat", "pinned", "index.md")) }
+  # ...but declining a piece is not declining the ISSUE. A contributor's stray include must not
+  # stop every compliant letter beside it — the same posture the missing-index.md branch already
+  # takes, and the one a checkpoint build depends on. The harsher failure used to be reserved for
+  # the MORE recoverable problem, which was the bug.
+  ok("the run still succeeds — a declined piece does not take the issue down") { $hostile_status == 0 }
+  ok("the issue was still written") { File.exist?(File.join(dir3, "_intermediates", "current.md")) }
+  ok("the decline is reported, not swallowed") { out.include?("NOT carried") }
+  # A caller that would rather stop than publish an issue with a hole in it says so.
+  ok("--strict makes a decline fatal") { $strict_status != 0 }
+  ok("--strict says why it stopped") { $strict_out.include?("--strict") }
   FileUtils.remove_entry(dir3)
 end
 
