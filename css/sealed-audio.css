@@ -1,0 +1,69 @@
+/* Sealed audio exhibits. The timeline is the argument: the whole recording is drawn to
+   scale, and the stretches with no key are drawn as absence rather than omitted. A reader
+   should be able to see how much was withheld without being told. */
+
+.sealed-audio { margin: 1.5em 0; }
+
+.sealed-audio-mount audio { width: 100%; display: block; }
+
+.sealed-audio-timeline {
+  display: flex;
+  width: 100%;
+  height: 0.75em;
+  margin: 0.4em 0 0.3em;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--rule, #d8d4cc);
+  position: relative;
+}
+
+/* Disclosed. Solid, because these bytes are here and checkable. */
+.sealed-audio-seg.lit { background: var(--ink, #2c2a26); }
+
+/* Sealed. Hatched rather than blank: nothing was cut, and something is known to be there —
+   its hash is published and its duration is counted. Absence with a receipt. */
+.sealed-audio-seg.dark {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--rule, #d8d4cc) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.sealed-audio-seg { min-width: 1px; }
+.sealed-audio-seg.lit + .sealed-audio-seg.dark,
+.sealed-audio-seg.dark + .sealed-audio-seg.lit { border-left: 1px solid var(--bg, #fbf9f4); }
+
+/* Where the playhead is, over the WHOLE recording — sealed stretches included, so the
+   proportion stays honest while playback skips them. */
+.sealed-audio-timeline::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: var(--playhead, 0%);
+  width: 1px;
+  background: var(--accent, #a33);
+}
+
+.sealed-audio-note,
+.sealed-audio-error {
+  font-size: 0.85em;
+  color: var(--muted, #6b665e);
+  margin: 0.2em 0 0;
+  min-height: 1.2em;
+}
+.sealed-audio-error { color: var(--accent, #a33); }
+
+.sealed-audio figcaption .held { font-style: italic; }
+.sealed-audio figcaption .disclosed { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sealed-audio-timeline::after { transition: none; }
+}
+
+/* Print: the player is gone, but the attestation must survive onto paper. */
+@media print {
+  .sealed-audio-mount audio, .sealed-audio-note { display: none; }
+  .sealed-audio-timeline { height: 0.5em; }
+}

@@ -27,9 +27,11 @@ def map_of(n, secs = 5.0)
                                     "start" => i * secs, "duration" => secs } },
     "duration" => n * secs }
 end
-def ref(n, disclosed)
+def ref(n, disclosed, pile = nil)
   { "kind" => "ref", "mediaType" => "audio/mp4", "source" => "Call Recording.m4a",
-    "hash" => "sha256:d5767d70", "media" => map_of(n), "disclosed" => disclosed }
+    "hash" => "sha256:d5767d70", "media" => map_of(n), "disclosed" => disclosed,
+    "pile" => pile || { "chunks" => "https://pile.example/inbox", "manifest" => "https://pile.example/inbox/manifest.json",
+                        "keys" => "./exhibits/call.keys.json", "base_seq" => 12 } }
 end
 def render(r) = AnecdoteExhibit.render({ "body" => [r] })
 
@@ -79,6 +81,13 @@ ok("carries the disclosed set")    { html.include?('data-disclosed="3-5"') }
 ok("embeds the map as JSON")       { html.include?("sealed-audio-map") && html.include?('"schema":"media.map/v1"') }
 ok("states how much was disclosed"){ html.include?("0:15 of 0:50 disclosed") && html.include?("3 of 10 chunk(s)") }
 ok("keeps the source hash")        { html.include?("sha256:d5767d70") }
+ok("points at the pile's static files") do
+  html.include?('data-manifest="https://pile.example/inbox/manifest.json"') &&
+    html.include?('data-keys="./exhibits/call.keys.json"') && html.include?('data-base-seq="12"')
+end
+# chunk index -> pile block seq is an OFFSET, so a payload keeps its own numbering wherever
+# it lands in a pile and survives the pile being appended to or rotated.
+ok("carries the base seq offset")  { html.include?('data-base-seq="12"') }
 ok("degrades without scripting")   { html.include?("<noscript>") }
 ok("contains no player logic")     { !html.include?("<script>") && !html.match?(/on\w+=/) }
 
