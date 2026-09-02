@@ -188,10 +188,19 @@ module AnecdoteExhibit
         %(<span class="disclosed">#{h played} of #{h dur} disclosed — #{got} of #{n} chunk(s)</span>)
     end
 
+    # Where the sealed bytes live. The pile is a static origin — ciphertext, a signed
+    # manifest, and a disclosure bundle of revealed keys — so every one of these is a plain
+    # cacheable GET and none of them is computed per reader.
+    pile = hashish(ref["pile"])
     %(<figure class="anecdote-ref sealed-audio" data-disclosure="#{h state}">) +
       %(\n      <div class="sealed-audio-mount") +
       %( data-location="#{h loc}") +
       %( data-disclosed="#{h MediaMap.ranges(MediaMap.disclosed_indexes(ref))}") +
+      %( data-chunks="#{h pile["chunks"]}") +
+      %( data-manifest="#{h pile["manifest"]}") +
+      %( data-keys="#{h pile["keys"]}") +
+      %( data-base-seq="#{h(pile["base_seq"] || 0)}") +
+      %( data-codec="#{h(map["codec"] || %(audio/mp4; codecs="mp4a.40.2"))}") +
       %(>) +
       %(\n        <noscript>#{shown} — this exhibit needs scripting to play.</noscript>) +
       %(\n      </div>) +
