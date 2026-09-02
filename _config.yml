@@ -68,3 +68,11 @@ og_description: ""
 preferences:
   dark: false
   year: "2026"
+
+# Origins a sealed exhibit may fetch its ciphertext from, space separated, added to connect-src.
+# A data-pile's static surface (manifest, chunks, disclosure bundle) may live on a Pages origin,
+# on raw.githubusercontent.com, or behind a cache — all cross-origin from the site rendering the
+# piece. Empty means same-origin only, which is the honest default: an engine that shipped a
+# consumer's host would be bending around a customer.
+#   exhibit_origins: "https://raw.githubusercontent.com https://pile.example"
+exhibit_origins: ""

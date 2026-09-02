@@ -10,7 +10,22 @@
 
   <title>{{ page.title | default: site.title }}</title>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' https://img.shields.io; frame-src 'self' https://www.youtube-nocookie.com https://www.udio.com" />
+  {%- comment -%}
+    media-src carries `blob:` because a sealed-audio exhibit plays through MediaSource, whose
+    object URL has an OPAQUE origin — `'self'` does not cover it, and without this the element
+    silently never opens rather than erroring. That is engine-level: the player ships here.
+
+    connect-src is the SITE's to widen. A sealed exhibit's ciphertext lives in a data-pile that
+    may be served from anywhere (a Pages origin, raw.githubusercontent.com, a cache in front of
+    either), and this engine is deliberately blind to its consumers — so it defaults to 'self'
+    and a mounting site names its own pile origins in `exhibit_origins`. Naming a consumer's
+    host here would be the engine bending around a customer.
+
+    Not added on speculation: `img-src blob:` would be needed the day an image exhibit
+    reassembles tiles into an <img> or a canvas. There is no such exhibit, so it is not granted.
+  {%- endcomment -%}
+  {%- assign _origins = site.exhibit_origins | default: "" -%}
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' https://img.shields.io; media-src 'self' blob:; connect-src 'self'{% if _origins != "" %} {{ _origins }}{% endif %}; frame-src 'self' https://www.youtube-nocookie.com https://www.udio.com" />
   <meta name="viewport" content="width=device-width" />
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
 
