@@ -28,6 +28,24 @@ inputs:
       told.
     required: false
     default: '_intermediates'
+  strict:
+    description: >-
+      Fail the run if any piece is declined (template syntax, or no index.md in the pin)
+      rather than skipping it and carrying its siblings.
+
+      Belongs at an AREA, not at a centre. The refusal exists because "template syntax in an
+      ejected piece is something an editor fixes there, where an editor is present" — and the
+      editor is present at the area. A centre is a pointer tier with nothing to fix, so failing
+      there would stop on a problem it structurally cannot act on while the tier that could act
+      sails past.
+
+      Cheap here because refreshing intermediates is NOT a publication: a non-zero exit commits
+      nothing, so a consumer keeps reading the last good artifact — stale but internally
+      consistent, rather than fresh with a hole in it — and the lag is loud because the run is
+      red. Default off, which keeps a checkpoint's ships-regardless posture for anyone who
+      wants it.
+    required: false
+    default: 'false'
   journal:
     description: >-
       Content mount, if the site does not use the engine's `journal` config value. A cited
@@ -62,6 +80,7 @@ runs:
         [ -n "${{ inputs.issues }}" ]  && args="$args --issues ${{ inputs.issues }}"
         [ -n "${{ inputs.out }}" ]     && args="$args --out ${{ inputs.out }}"
         [ -n "${{ inputs.journal }}" ] && args="$args --journal ${{ inputs.journal }}"
+        [ "${{ inputs.strict }}" = "true" ] && args="$args --strict"
         ruby "${{ inputs.engine }}/bin/build-intermediates" $args
       shell: bash
 
