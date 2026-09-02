@@ -32,17 +32,24 @@
 #
 # Run from the SITE root — the repo wearing the glove, never this engine.
 #
-#   bin/build-intermediates [--issues DIR] [--out DIR] [--journal DIR]
+#   bin/build-intermediates [--issues DIR] [--out DIR] [--journal DIR] [--strict]
+#
+# REFUSING A PIECE IS NOT REFUSING THE ISSUE. A piece that cannot be carried is named, skipped
+# and reported; its siblings still ship. `--strict` makes any refusal fatal, for a caller that
+# would rather stop than publish an issue with a hole in it. Whether the piece is carried does
+# not change between the two — only whether the rest of the run survives it.
 
 require "yaml"
 require "date"
 require "fileutils"
 require "shellwords"
 
-opts = { issues: "issues", out: "_intermediates", journal: nil }
+opts = { issues: "issues", out: "_intermediates", journal: nil, strict: false }
+refused = []   # [url, reason] — reported together at the end, never one at a time mid-run
 args = ARGV.dup
 until args.empty?
   case (a = args.shift)
+  when "--strict"  then opts[:strict]  = true
   when "--issues"  then opts[:issues]  = args.shift
   when "--out"     then opts[:out]     = args.shift
   when "--journal" then opts[:journal] = args.shift
@@ -112,9 +119,11 @@ URL_CLAIMS = %w[redirect_from redirect_to permalink].freeze
 
 # Write one cited piece into the artifact, at the path its url already names, so the tier above
 # can copy the tree straight into its own served space.
+# Returns nil when the piece was carried, or a reason string when it was declined. NEVER exits:
+# whether a declined piece is fatal belongs to the caller, not here.
 def write_piece(url, path, out)
   src = File.join(path, "index.md")
-  return warn("  #{url}: no index.md in the pin; not carried") unless File.exist?(src)
+  return "no index.md in the pin" unless File.exist?(src)
 
   raw = File.read(src)
   m = /\A---\r?\n(.*?)\r?\n---\r?\n?/m.match(raw)
@@ -139,13 +148,12 @@ def write_piece(url, path, out)
   # discovers unattended. Failing here is the whole point — the alternative is carrying it and
   # hoping whoever mounts it is careful.
   if (found = body.scan(/\{\{[^}]*\}\}|\{%-?\s*\w+/).uniq.first(3)).any?
-    abort <<~REFUSED
-      build-intermediates: refusing to carry #{url}
-        It contains template syntax: #{found.join(", ")}
-        A mounting site evaluates that in ITS build, against ITS includes and plugins. Remove it
-        from the piece — a letter is prose, and anything it needs rendering is the journal's to
-        render around it.
-    REFUSED
+    # Declined, not fatal. The piece is still not carried — the security property is untouched —
+    # but a contributor's stray {% include %} does not get to stop every compliant letter beside
+    # it. The harsher failure was reserved for the MORE recoverable problem: a piece whose
+    # repository has vanished is skipped and the issue ships, while a piece that is merely
+    # present and non-compliant took the whole run down. That asymmetry was the bug.
+    return "template syntax (#{found.join(", ")})"
   end
 
   dest = File.join(out, url.sub(%r{\A/}, "").sub(%r{/\z}, ""), "index.md")
@@ -170,7 +178,10 @@ issue_files.each do |file|
     url = entry["url"].to_s
     path = path_for(url, mount)
     sha = path ? pinned_commit(path) : nil
-    write_piece(url, path, opts[:out]) if path && sha
+    if path && sha
+      why = write_piece(url, path, opts[:out])
+      refused << [url, why] if why
+    end
     {
       "url" => url,
       "title" => entry["title"].to_s,
@@ -212,6 +223,21 @@ end
 # an indirection rather than a copy so that an issue has exactly one rendering — the one it
 # was cut with — and a redesign years from now cannot quietly turn a past issue into
 # something it never was.
+#
+# NAMED `index.md`, because the point of _intermediates/ is that it IS a site: point a renderer
+# at it and the entry point is the front page, the issue files are the issues, the piece
+# fragments are the pieces — inert, portable, complete, and with no magic filenames anywhere in
+# it. `index` is the name a machine already knows to ask for, so this needs no content
+# negotiation, no Accept header, and nothing running.
+#
+# That is worth more than it used to be. Reader-mode tooling has started crunching rendered HTML
+# back down into markdown and inferring order from the DOM — a reconstruction. We have the
+# markdown by construction, so we can serve the source instead of a guess at it. `index.md`
+# sitting beside `index.html` is the whole mechanism.
+#
+# `entry_point: true` remains the AUTHORITATIVE marker. The filename matters only to a consumer
+# that must choose a URL before it can read front matter, which is the browser's case and
+# nobody else's.
 latest = built.last
 entry = {
   "entry_point" => true,
@@ -220,15 +246,41 @@ entry = {
   "title" => latest ? "#{title} — current issue" : "#{title} — no issue yet"
 }.compact
 entry_body = latest ? "The current issue is [#{latest}](#{latest}.md)." : "*No issue has been cut yet.*"
-File.write(File.join(opts[:out], "current.md"), "#{entry.to_yaml}---\n\n#{entry_body}\n")
+File.write(File.join(opts[:out], "index.md"), "#{entry.to_yaml}---\n\n#{entry_body}\n")
+
+# Report every declined piece together, once, where it cannot scroll past unnoticed. Skipping
+# quietly would be the real failure: an issue shipping with a hole nobody was told about.
+unless refused.empty?
+  warn "build-intermediates: #{refused.size} piece(s) NOT carried:"
+  refused.each { |url, why| warn "  #{url} — #{why}" }
+  warn "  A mounting site evaluates template syntax in ITS build, against ITS includes and"
+  warn "  plugins. Remove it from the piece — a letter is prose, and anything it needs"
+  warn "  rendering is the journal's to render around it."
+  abort "build-intermediates: --strict, so a declined piece is fatal" if opts[:strict]
+end
 
 # An intermediate is INERT. Anything that has to be rendered to be safe is not portable, and
 # the failure would be silent — a blank page rather than an error. Cheaper to refuse here.
 # The files this tool AUTHORS must be inert — anything that has to be rendered to be safe is
-# not portable, and the failure would be a blank page rather than an error. A carried piece is
-# not one of those: it is a contributor's Jekyll source and may legitimately hold Liquid, which
-# is warned about above rather than refused here.
-offenders = Dir.glob(File.join(opts[:out], "*.md")).select { |f| File.read(f).match?(/\{\{|\{%/) }
+# not portable, and the failure would be a blank page rather than an error.
+#
+# CARRIED PIECES ARE NOT COVERED HERE, and are not exempt: write_piece declines them before one
+# is ever written out, so nothing non-inert reaches this directory. This glob is deliberately
+# NON-RECURSIVE so it sees only what this tool authored — the issue files and the entry point —
+# rather than re-scanning pieces that already passed their own stricter gate.
+#
+# (This comment once said a carried piece "may legitimately hold Liquid, which is warned about
+# rather than refused". That WAS true until the refusal landed the next day, and it then sat
+# here describing the previous version — which is worse than a wrong comment, because it reads
+# as authoritative and a consumer still pinned behind the change confirms it. If the two gates
+# ever genuinely diverge, say so in write_piece, which is where the decision is made.)
+#
+# The non-recursion is load-bearing, so name the authored files rather than globbing a shape:
+# were the entry point ever moved into a subdirectory, `out/*.md` would stop seeing it and it
+# would fall out of this refusal silently, which is the exact failure mode this guard exists
+# to prevent.
+authored = [File.join(opts[:out], "index.md")] + built.map { |k| File.join(opts[:out], "#{k}.md") }
+offenders = authored.select { |f| File.exist?(f) && File.read(f).match?(/\{\{|\{%/) }
 unless offenders.empty?
   warn "build-intermediates: template syntax in an intermediate, which must be inert:"
   offenders.each { |f| warn "  #{f}" }

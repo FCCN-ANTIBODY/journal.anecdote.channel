@@ -111,8 +111,13 @@ redirect_from, redirect_to), because those belong to whichever site first publis
 nothing was ever moved. The layout goes too — a piece must not have to know who is
 publishing it.
 
-A carried piece may contain NO template syntax, and `build-intermediates` refuses rather than
-warns. This is not about portability. A mounting site evaluates what it is handed, so a
+A carried piece may contain NO template syntax. `build-intermediates` **declines the piece** —
+names it, skips it, reports it, and carries its siblings — and `--strict` makes that fatal for a
+caller who would rather stop than publish an issue with a hole in it. The piece is not carried
+either way; only the fate of the rest of the run changes. It used to abort on the first offender,
+which reserved the harsher failure for the MORE recoverable problem: a piece whose repository had
+vanished was skipped and the issue shipped, while a piece merely containing a `{%` took every
+compliant letter beside it down. This is not about portability. A mounting site evaluates what it is handed, so a
 piece's `{% include %}` would run in THAT site's build, against ITS includes, ITS plugins and
 ITS filesystem, before anything is served — which puts it out of reach of any content policy,
 because no browser is involved. A contributor writes the letter; they do not get to run a step
