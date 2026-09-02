@@ -152,7 +152,28 @@
       var ms = new MediaSource();
       ui.audio.src = URL.createObjectURL(ms);
       return new Promise(function (resolve, reject) {
+        // A blob: object URL has an OPAQUE origin, so a `media-src` that does not name `blob:`
+        // blocks it — and the block is SILENT: `sourceopen` simply never fires, the element sits
+        // dead, and a promise waiting on it never settles. That is the worst failure available,
+        // because the timeline still renders and the page looks merely broken rather than
+        // refused. So: watch the element, and give up out loud.
+        var settled = false;
+        var giveUp = function (why) {
+          if (settled) return;
+          settled = true;
+          reject(new Error(why));
+        };
+        ui.audio.addEventListener("error", function () {
+          giveUp("the audio element refused the stream — most likely a Content-Security-Policy " +
+                 "without `media-src blob:`, since a MediaSource object URL is not covered by 'self'");
+        }, { once: true });
+        setTimeout(function () {
+          giveUp("the audio stream never opened (10s). If this page sets a Content-Security-Policy, " +
+                 "check that media-src allows blob: and connect-src allows the pile's origin");
+        }, 10000);
+
         ms.addEventListener("sourceopen", function () {
+          if (settled) return;
           var sb;
           try { sb = ms.addSourceBuffer(d.codec || 'audio/mp4; codecs="mp4a.40.2"'); }
           catch (e) { return reject(new Error("this browser will not decode " + (d.codec || "audio/mp4"))); }
@@ -169,6 +190,7 @@
             if (n >= queue.length) {
               try { if (ms.readyState === "open") ms.endOfStream(); } catch (e) {}
               gapJump(ui, chunks, ui.lit);
+              settled = true;
               return resolve();
             }
             var item = queue[n];
@@ -198,6 +220,12 @@
   // optional and there is no flag to skip it.
   function openChunk(base, item, manifest, bundle) {
     return fetch(base + "/" + encodeURIComponent(item.file) + (item.init ? "" : ".enc"), { mode: "cors" })
+      .catch(function (e) {
+        // A CSP-blocked cross-origin fetch surfaces as an opaque TypeError with no detail, which
+        // reads like a network fault. Say the likelier thing rather than let it look like one.
+        throw new Error("could not reach chunk " + item.file + " — if this page sets a " +
+                        "Content-Security-Policy, connect-src must name the pile's origin (" + e.message + ")");
+      })
       .then(function (r) {
         if (!r.ok) throw new Error("chunk " + item.file + " is not retrievable (" + r.status + ")");
         return r.arrayBuffer();
