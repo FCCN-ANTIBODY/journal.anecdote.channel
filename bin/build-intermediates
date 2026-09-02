@@ -223,6 +223,21 @@ end
 # an indirection rather than a copy so that an issue has exactly one rendering — the one it
 # was cut with — and a redesign years from now cannot quietly turn a past issue into
 # something it never was.
+#
+# NAMED `index.md`, because the point of _intermediates/ is that it IS a site: point a renderer
+# at it and the entry point is the front page, the issue files are the issues, the piece
+# fragments are the pieces — inert, portable, complete, and with no magic filenames anywhere in
+# it. `index` is the name a machine already knows to ask for, so this needs no content
+# negotiation, no Accept header, and nothing running.
+#
+# That is worth more than it used to be. Reader-mode tooling has started crunching rendered HTML
+# back down into markdown and inferring order from the DOM — a reconstruction. We have the
+# markdown by construction, so we can serve the source instead of a guess at it. `index.md`
+# sitting beside `index.html` is the whole mechanism.
+#
+# `entry_point: true` remains the AUTHORITATIVE marker. The filename matters only to a consumer
+# that must choose a URL before it can read front matter, which is the browser's case and
+# nobody else's.
 latest = built.last
 entry = {
   "entry_point" => true,
@@ -231,7 +246,7 @@ entry = {
   "title" => latest ? "#{title} — current issue" : "#{title} — no issue yet"
 }.compact
 entry_body = latest ? "The current issue is [#{latest}](#{latest}.md)." : "*No issue has been cut yet.*"
-File.write(File.join(opts[:out], "current.md"), "#{entry.to_yaml}---\n\n#{entry_body}\n")
+File.write(File.join(opts[:out], "index.md"), "#{entry.to_yaml}---\n\n#{entry_body}\n")
 
 # Report every declined piece together, once, where it cannot scroll past unnoticed. Skipping
 # quietly would be the real failure: an issue shipping with a hole nobody was told about.
@@ -264,7 +279,7 @@ end
 # were the entry point ever moved into a subdirectory, `out/*.md` would stop seeing it and it
 # would fall out of this refusal silently, which is the exact failure mode this guard exists
 # to prevent.
-authored = [File.join(opts[:out], "current.md")] + built.map { |k| File.join(opts[:out], "#{k}.md") }
+authored = [File.join(opts[:out], "index.md")] + built.map { |k| File.join(opts[:out], "#{k}.md") }
 offenders = authored.select { |f| File.exist?(f) && File.read(f).match?(/\{\{|\{%/) }
 unless offenders.empty?
   warn "build-intermediates: template syntax in an intermediate, which must be inert:"

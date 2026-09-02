@@ -115,7 +115,7 @@ Dir.chdir(dir) do
 
   # The arrangement files this tool AUTHORS carry no prose: an issue names its pieces, it does
   # not contain them. The pieces themselves are carried separately, below.
-  authored = ["_intermediates/2026-08.md", "_intermediates/current.md"]
+  authored = ["_intermediates/2026-08.md", "_intermediates/index.md"]
   ok("the arrangement names its pieces and does not contain them") do
     authored.none? { |f| File.read(f).include?(PROSE) }
   end
@@ -138,10 +138,10 @@ Dir.chdir(dir) do
   end
   ok("an unpinned piece is not carried") { !File.exist?("_intermediates/journal/beat/unpinned/index.md") }
 
-  entry = front_matter("_intermediates/current.md")
+  entry = front_matter("_intermediates/index.md")
   ok("the entry point indirects to the newest issue") { entry["issue"] == "2026-08" && entry["entry_point"] }
   ok("the entry point is an indirection, not a copy of the issue") do
-    !File.read("_intermediates/current.md").include?("A letter that ran")
+    !File.read("_intermediates/index.md").include?("A letter that ran")
   end
 
   ok("intermediates are inert — nothing has to be rendered to be safe") do
@@ -155,9 +155,9 @@ FileUtils.remove_entry(dir)
 dir2, _out2, status2 = build(issues: {})
 ok("an area with no issues still exits clean") { status2.zero? }
 Dir.chdir(dir2) do
-  entry = front_matter("_intermediates/current.md")
+  entry = front_matter("_intermediates/index.md")
   ok("with nothing cut, the entry point says so plainly") do
-    entry["issue"].nil? && File.read("_intermediates/current.md").include?("No issue has been cut yet")
+    entry["issue"].nil? && File.read("_intermediates/index.md").include?("No issue has been cut yet")
   end
 end
 FileUtils.remove_entry(dir2)
@@ -203,7 +203,7 @@ begin
   # takes, and the one a checkpoint build depends on. The harsher failure used to be reserved for
   # the MORE recoverable problem, which was the bug.
   ok("the run still succeeds — a declined piece does not take the issue down") { $hostile_status == 0 }
-  ok("the issue was still written") { File.exist?(File.join(dir3, "_intermediates", "current.md")) }
+  ok("the issue was still written") { File.exist?(File.join(dir3, "_intermediates", "index.md")) }
   ok("the decline is reported, not swallowed") { out.include?("NOT carried") }
   # A caller that would rather stop than publish an issue with a hole in it says so.
   ok("--strict makes a decline fatal") { $strict_status != 0 }
