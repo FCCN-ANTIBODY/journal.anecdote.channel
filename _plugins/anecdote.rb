@@ -200,13 +200,23 @@ module AnecdoteExhibit
       %( data-manifest="#{h pile["manifest"]}") +
       %( data-keys="#{h pile["keys"]}") +
       %( data-base-seq="#{h(pile["base_seq"] || 0)}") +
+      %( data-init-seq="#{h(pile["init_seq"])}") +
       %( data-codec="#{h(map["codec"] || %(audio/mp4; codecs="mp4a.40.2"))}") +
       %(>) +
       %(\n        <noscript>#{shown} — this exhibit needs scripting to play.</noscript>) +
       %(\n      </div>) +
-      %(\n      <script type="application/json" class="sealed-audio-map">#{JSON.generate(map).gsub("<", "\\u003c")}</script>) +
+      %(\n      <script type="application/json" class="sealed-audio-map">#{JSON.generate(timeline(map)).gsub("<", "\\u003c")}</script>) +
       %(\n      <figcaption>#{receipt_line(ref)} #{shown}</figcaption>) +
       %(\n    </figure>)
+  end
+
+  # The map the PAGE needs is the timeline, not the cutting record. The player addresses bytes by
+  # seq off the signed manifest, so a chunk's original filename and size are dead weight inlined
+  # into every reader's HTML — 42% of the block on a ten-minute recording, and it scales with
+  # duration. The full map stays with the pile, where it is the account of what was cut.
+  def timeline(map)
+    m = hashish(map)
+    m.merge("chunks" => MediaMap.chunks(m).map { |c| c.slice("index", "start", "duration") })
   end
 
   def receipt_line(ref, held: false)

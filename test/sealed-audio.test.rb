@@ -31,7 +31,7 @@ def ref(n, disclosed, pile = nil)
   { "kind" => "ref", "mediaType" => "audio/mp4", "source" => "Call Recording.m4a",
     "hash" => "sha256:d5767d70", "media" => map_of(n), "disclosed" => disclosed,
     "pile" => pile || { "chunks" => "https://pile.example/inbox", "manifest" => "https://pile.example/inbox/manifest.json",
-                        "keys" => "./exhibits/call.keys.json", "base_seq" => 12 } }
+                        "keys" => "./exhibits/call.keys.json", "base_seq" => 12, "init_seq" => 11 } }
 end
 def render(r) = AnecdoteExhibit.render({ "body" => [r] })
 
@@ -79,6 +79,12 @@ html = render(ref(10, "3-5"))
 ok("marks the disclosure state")   { html.include?('data-disclosure="partial"') }
 ok("carries the disclosed set")    { html.include?('data-disclosed="3-5"') }
 ok("embeds the map as JSON")       { html.include?("sealed-audio-map") && html.include?('"schema":"media.map/v1"') }
+# The page gets the TIMELINE, not the cutting record: the player reads block names off the signed
+# manifest, so filenames and sizes inlined here are weight every reader pays and nobody spends.
+ok("inlines the timeline, not the filenames") do
+  blob = html[/class="sealed-audio-map">(.*?)<\/script>/m, 1]
+  blob.include?('"start"') && blob.include?('"duration"') && !blob.include?('"file":"c0.m4s"')
+end
 ok("states how much was disclosed"){ html.include?("0:15 of 0:50 disclosed") && html.include?("3 of 10 chunk(s)") }
 ok("keeps the source hash")        { html.include?("sha256:d5767d70") }
 ok("points at the pile's static files") do
@@ -88,6 +94,10 @@ end
 # chunk index -> pile block seq is an OFFSET, so a payload keeps its own numbering wherever
 # it lands in a pile and survives the pile being appended to or rotated.
 ok("carries the base seq offset")  { html.include?('data-base-seq="12"') }
+# The init segment is a BLOCK like any other, not a file shipped in the clear. The player joins
+# the map (timeline) to the manifest (bytes) by seq, so it needs to know where init landed —
+# a payload appended into a busy pile does not start at 0.
+ok("names where the init block landed") { html.include?('data-init-seq="11"') }
 ok("degrades without scripting")   { html.include?("<noscript>") }
 ok("contains no player logic")     { !html.include?("<script>") && !html.match?(/on\w+=/) }
 
@@ -100,8 +110,11 @@ ok("a complete recording says so") { full.include?("complete") && full.include?(
 
 # The map is embedded in a <script> block; a chunk filename containing "</script>" (or any
 # "<") must not be able to close it and inject markup.
+# Inject through a field that SURVIVES into the page. The chunk `file` no longer does — the
+# renderer emits the timeline only — so testing there would assert the escaping of something
+# that is never printed, and pass forever without proving anything.
 evil = ref(2, "0-1")
-evil["media"]["chunks"][0]["file"] = "</script><img src=x onerror=alert(1)>.m4s"
+evil["media"]["init"]["file"] = "</script><img src=x onerror=alert(1)>.mp4"
 ok("an embedded map cannot break out of its script block") do
   h = render(evil)
   !h.include?("</script><img") && h.include?("\\u003c")

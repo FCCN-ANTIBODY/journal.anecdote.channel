@@ -141,6 +141,10 @@
     var d = mount.dataset;
     var base = (d.chunks || d.location || ".").replace(/\/$/, "");
     var baseSeq = +(d.baseSeq || 0);
+    // Where the init segment sits in the pile. Defaults to the block before the first chunk,
+    // which is how media-chunk + drop-pack lay a payload down, but a payload appended into a
+    // busy pile can say otherwise.
+    var initSeq = d.initSeq !== undefined && d.initSeq !== "" ? +d.initSeq : baseSeq - 1;
 
     return Promise.all([
       d.manifest ? fetch(d.manifest, { mode: "cors" }).then(function (r) { return r.json(); }) : Promise.resolve(null),
@@ -182,8 +186,16 @@
           // timeline must show what is sealed, and a shortened duration would hide it.
           try { ms.duration = total; } catch (e) { /* set once data lands */ }
 
-          var queue = [{ init: true, file: map.init.file, seq: null }].concat(
-            disclosed.map(function (i) { return { file: chunks[i].file, seq: baseSeq + i, index: i }; })
+          // THE MANIFEST NAMES THE BYTES; THE MAP NAMES THE TIMELINE. They are different
+          // vocabularies and joining them wrongly is silent: the map calls a chunk `index7.m4s`
+          // while the pile stores it as `000008.enc`, so fetching by the map's filename 404s
+          // every request. Address everything by seq and read the block name off the manifest.
+          //
+          // The init segment is NOT special-cased. It is sealed like any other block (E1: "always
+          // disclosed (seq 0)"), so it is fetched, hash-checked and decrypted like any other —
+          // one path, and nothing outside the signed chain.
+          var queue = [{ seq: initSeq, init: true }].concat(
+            disclosed.map(function (i) { return { seq: baseSeq + i, index: i }; })
           );
 
           var step = function (n) {
@@ -219,21 +231,21 @@
   // play, so the hash check is what stands between a reader and forged audio. It is not
   // optional and there is no flag to skip it.
   function openChunk(base, item, manifest, bundle) {
-    return fetch(base + "/" + encodeURIComponent(item.file) + (item.init ? "" : ".enc"), { mode: "cors" })
+    var entry = manifest && manifest.entries && manifest.entries[item.seq];
+    if (!entry) return Promise.reject(new Error("no manifest entry for seq " + item.seq));
+    return fetch(base + "/" + encodeURIComponent(entry.block), { mode: "cors" })
       .catch(function (e) {
         // A CSP-blocked cross-origin fetch surfaces as an opaque TypeError with no detail, which
         // reads like a network fault. Say the likelier thing rather than let it look like one.
-        throw new Error("could not reach chunk " + item.file + " — if this page sets a " +
+        throw new Error("could not reach block " + entry.block + " — if this page sets a " +
                         "Content-Security-Policy, connect-src must name the pile's origin (" + e.message + ")");
       })
       .then(function (r) {
-        if (!r.ok) throw new Error("chunk " + item.file + " is not retrievable (" + r.status + ")");
+        if (!r.ok) throw new Error("block " + entry.block + " (seq " + item.seq + ") is not retrievable (" + r.status + ")");
         return r.arrayBuffer();
       })
       .then(function (buf) {
         var bytes = new Uint8Array(buf);
-        if (item.init) return bytes;                     // the init segment ships in the clear
-        var entry = manifest && manifest.entries && manifest.entries[item.seq];
         var key = bundle.block_keys[String(item.seq)];
         if (!key) throw new Error("no key for chunk at seq " + item.seq);
         var checked = entry
