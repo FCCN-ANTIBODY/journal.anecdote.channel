@@ -225,10 +225,25 @@ File.write(File.join(opts[:out], "current.md"), "#{entry.to_yaml}---\n\n#{entry_
 # An intermediate is INERT. Anything that has to be rendered to be safe is not portable, and
 # the failure would be silent — a blank page rather than an error. Cheaper to refuse here.
 # The files this tool AUTHORS must be inert — anything that has to be rendered to be safe is
-# not portable, and the failure would be a blank page rather than an error. A carried piece is
-# not one of those: it is a contributor's Jekyll source and may legitimately hold Liquid, which
-# is warned about above rather than refused here.
-offenders = Dir.glob(File.join(opts[:out], "*.md")).select { |f| File.read(f).match?(/\{\{|\{%/) }
+# not portable, and the failure would be a blank page rather than an error.
+#
+# CARRIED PIECES ARE NOT COVERED HERE, and are not exempt: they are refused earlier and harder,
+# by the `abort` in write_piece, before one is ever written out. This glob is deliberately
+# NON-RECURSIVE so it sees only what this tool authored — the issue files and the entry point —
+# rather than re-scanning pieces that already passed their own stricter gate.
+#
+# (An earlier version of this comment said a carried piece "may legitimately hold Liquid, which
+# is warned about rather than refused". That was never true of the code and contradicted both
+# write_piece's own comment and AGENTS.md; it misread as an exemption and cost a reader real
+# time. If the two gates ever genuinely diverge, say so in write_piece, which is where the
+# decision is made.)
+#
+# The non-recursion is load-bearing, so name the authored files rather than globbing a shape:
+# were the entry point ever moved into a subdirectory, `out/*.md` would stop seeing it and it
+# would fall out of this refusal silently, which is the exact failure mode this guard exists
+# to prevent.
+authored = [File.join(opts[:out], "current.md")] + built.map { |k| File.join(opts[:out], "#{k}.md") }
+offenders = authored.select { |f| File.exist?(f) && File.read(f).match?(/\{\{|\{%/) }
 unless offenders.empty?
   warn "build-intermediates: template syntax in an intermediate, which must be inert:"
   offenders.each { |f| warn "  #{f}" }
