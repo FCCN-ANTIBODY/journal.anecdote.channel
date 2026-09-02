@@ -17,6 +17,7 @@
 
 require "json"
 require "cgi"
+require_relative "media_map"
 
 module AnecdoteExhibit
   module_function
@@ -100,12 +101,22 @@ module AnecdoteExhibit
     refs_shown = refs.select { |p| ref_shown?(p) }
     return "sealed"   if !text_shown && refs_shown.empty?
     all = (texts.empty? || text_shown) && (refs.empty? || refs_shown.size == refs.size)
+    # A recording with some chunks still sealed is PARTIAL however complete the rest is.
+    # Reporting it as "revealed" would be the exhibit overstating its own disclosure.
+    return "partial" if refs.any? { |r| media_ref?(r) && MediaMap.state(r) == "partial" }
     all ? "revealed" : "partial"
   end
 
   def ref_shown?(ref)
+    return MediaMap.state(ref) != "sealed" if media_ref?(ref)
     return true unless ref["file"].to_s.empty?
     !ref["bytes"].to_s.empty? && textual?(ref["mediaType"])
+  end
+
+  # A ref carrying a media.map/v1 is a SEALED RECORDING: its bytes live in a data-pile as
+  # per-chunk blocks, and this exhibit discloses some, all, or none of them.
+  def media_ref?(ref)
+    ref.is_a?(Hash) && ref["media"].is_a?(Hash) && ref["media"]["schema"].to_s.start_with?("media.map/")
   end
 
   # ---- parts --------------------------------------------------------------
@@ -129,6 +140,8 @@ module AnecdoteExhibit
   end
 
   def ref_part(ref, location)
+    return media_part(ref, location) if media_ref?(ref)
+
     media = ref["mediaType"].to_s
     file  = ref["file"].to_s
     loc   = (ref["location"].to_s.empty? ? location : ref["location"].to_s).sub(%r{/\z}, "")
@@ -149,6 +162,42 @@ module AnecdoteExhibit
     end
 
     %(<p class="anecdote-ref receipt">#{receipt_line(ref, held: true)}</p>)
+  end
+
+  # A sealed recording renders as an INERT MOUNT: the map and the disclosed set as data,
+  # and no player logic here. The browser module (js/sealed-audio.js) fetches chunks, checks
+  # each against its published hash, decrypts the ones it holds keys for, and paints the rest
+  # of the timeline dark. Keeping this side inert is deliberate — the offline origin has no
+  # Ruby, so whatever emits this markup is replaceable, and the player is not.
+  def media_part(ref, location)
+    map   = ref["media"]
+    state = MediaMap.state(ref)
+    n     = MediaMap.total(map)
+    loc   = (ref["location"].to_s.empty? ? location : ref["location"].to_s).sub(%r{/\z}, "")
+    dur   = MediaMap.hhmmss(map["duration"])
+
+    # The attestation, stated the same way whether or not anything is playable: this is how
+    # much recording exists, and this is how much of it you are being given.
+    if state == "sealed"
+      shown = %(<span class="held">held — #{n} chunk(s), #{h dur}, none disclosed</span>)
+    else
+      played = MediaMap.hhmmss(MediaMap.disclosed_seconds(ref))
+      got    = MediaMap.disclosed_indexes(ref).size
+      shown  = state == "revealed" ?
+        %(<span class="disclosed">#{h dur} — complete</span>) :
+        %(<span class="disclosed">#{h played} of #{h dur} disclosed — #{got} of #{n} chunk(s)</span>)
+    end
+
+    %(<figure class="anecdote-ref sealed-audio" data-disclosure="#{h state}">) +
+      %(\n      <div class="sealed-audio-mount") +
+      %( data-location="#{h loc}") +
+      %( data-disclosed="#{h MediaMap.ranges(MediaMap.disclosed_indexes(ref))}") +
+      %(>) +
+      %(\n        <noscript>#{shown} — this exhibit needs scripting to play.</noscript>) +
+      %(\n      </div>) +
+      %(\n      <script type="application/json" class="sealed-audio-map">#{JSON.generate(map).gsub("<", "\\u003c")}</script>) +
+      %(\n      <figcaption>#{receipt_line(ref)} #{shown}</figcaption>) +
+      %(\n    </figure>)
   end
 
   def receipt_line(ref, held: false)

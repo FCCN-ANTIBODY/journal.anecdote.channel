@@ -1,0 +1,191 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# media-chunk — cut a recording into independently-playable chunks and describe them.
+#
+#   bin/media-chunk <media-file> --out <dir> [--seconds N] [--no-verify] [--dry-run]
+#
+# This is the ONE tool in the constellation that knows what audio is. It does no
+# cryptography: it emits an init segment, N ordered chunk files, and a media.map/v1
+# describing them. Sealing those files is data-pile's job (bin/drop-pack), and binding
+# them to a piece is the exhibit's. Keeping the three apart is why data-pile stays
+# vendorless — ffmpeg is a heavy dependency for a template people fork, and it belongs
+# with the publisher, not with the tank.
+#
+# WHY CHUNKS AT ALL: a piece may want to feature a passage of a recording it will not
+# publish whole. Chunks are what disclosure operates on — each becomes one data-pile
+# drop block under its own key, so revealing a quote reveals nothing on either side of it.
+#
+# LOSSLESS OR NOTHING. Segmentation is a re-CONTAINERING (`-c:a copy`), never a
+# re-encode: the AAC packets in the chunks are the phone's own bytes. That is the claim
+# the whole exhibit rests on — an excerpt is not an edit, it is fewer of the same bytes —
+# so it is VERIFIED by default (reassemble, compare the decoded packet hash to the
+# source) and the tool refuses rather than emitting something it cannot stand behind.
+#
+# THE SEGMENTER IS A SEAM. `--segmenter` swaps the default ffmpeg shell-out for anything
+# answering the same contract, so the offline origin can supply a WASM ffmpeg (or a
+# pre-cut directory) without touching the planner. The pure core (MediaChunk.plan) does
+# no I/O and no shelling out, and is what test/ drives.
+
+require "json"
+require "digest"
+require "shellwords"
+
+module MediaChunk
+  module_function
+
+  SCHEMA = "media.map/v1"
+
+  # ---- the pure core ------------------------------------------------------
+  # segments: [{ "file" =>, "bytes" =>, "duration" => }] in playback order, init EXCLUDED.
+  # Returns a media.map/v1 Hash. No filesystem, no clock, no ffmpeg.
+  # lossless: true only when the reassembly was actually CHECKED. The map is the artifact that
+  # travels with the exhibit, so it must never assert a property nobody verified — "unverified"
+  # is a claim a reader can act on; a false "true" is not.
+  def plan(segments:, init:, source:, target: nil, tool: nil, lossless: "unverified")
+    raise ArgumentError, "no segments" if segments.nil? || segments.empty?
+    raise ArgumentError, "no init segment" if init.nil? || init["file"].to_s.empty?
+
+    at = 0.0
+    chunks = segments.each_with_index.map do |s, i|
+      d = Float(s["duration"])
+      raise ArgumentError, "chunk #{i} has non-positive duration #{d}" unless d > 0
+      raise ArgumentError, "chunk #{i} (#{s["file"]}) has no bytes" unless Integer(s["bytes"]) > 0
+      row = { "index" => i, "file" => s["file"].to_s, "bytes" => Integer(s["bytes"]),
+              "start" => round3(at), "duration" => round3(d) }
+      at += d
+      row
+    end
+
+    { "schema" => SCHEMA,
+      "source" => source,
+      "chunking" => { "target_seconds" => target, "tool" => tool, "lossless" => lossless }.compact,
+      # The init segment is a hard dependency: a chunk without it will not parse at all
+      # ("trun track id unknown, no tfhd was found"), so it is disclosed with every excerpt.
+      "init" => { "file" => init["file"].to_s, "bytes" => Integer(init["bytes"]) },
+      "chunks" => chunks,
+      "duration" => round3(at) }
+  end
+
+  # Which chunk indexes cover [from, to) seconds. Half-open, and a chunk counts if it
+  # overlaps at all — a quote that starts mid-chunk needs that chunk in full.
+  def covering(map, from, to)
+    map["chunks"].select { |c| c["start"] < to && (c["start"] + c["duration"]) > from }
+                 .map { |c| c["index"] }
+  end
+
+  def round3(f)
+    (f * 1000).round / 1000.0
+  end
+
+  # ---- the default seam: ffmpeg -------------------------------------------
+  def segment_with_ffmpeg(input, outdir, seconds)
+    raise "media-chunk: ffmpeg not found (or supply --segmenter)" if which("ffmpeg").nil?
+    FileUtils.mkdir_p(outdir)
+    cmd = ["ffmpeg", "-v", "error", "-i", input, "-c:a", "copy",
+           "-f", "hls", "-hls_time", seconds.to_s, "-hls_segment_type", "fmp4",
+           "-hls_fmp4_init_filename", "init.mp4", "-hls_list_size", "0",
+           "-hls_playlist_type", "vod", File.join(outdir, "index.m3u8")]
+    raise "media-chunk: ffmpeg failed" unless system(*cmd)
+    read_playlist(File.join(outdir, "index.m3u8"), outdir)
+  end
+
+  # Read durations from the playlist ffmpeg just wrote rather than re-probing each file:
+  # EXTINF is the segmenter's own account of what it cut, so the map cannot drift from it.
+  def read_playlist(playlist, outdir)
+    segs = []
+    pending = nil
+    File.readlines(playlist).each do |line|
+      line = line.strip
+      if line.start_with?("#EXTINF:")
+        pending = line.sub("#EXTINF:", "").split(",").first.to_f
+      elsif !line.empty? && !line.start_with?("#")
+        segs << { "file" => line, "bytes" => File.size(File.join(outdir, line)), "duration" => pending }
+        pending = nil
+      end
+    end
+    segs
+  end
+
+  # The claim, checked: reassembling every chunk must reproduce the source's decoded
+  # packet stream exactly. If this does not hold, the chunks are an edit and must not ship.
+  def packet_md5(input, extra = [])
+    out = `ffmpeg -v error #{extra.map { |a| Shellwords.escape(a) }.join(" ")} -i #{Shellwords.escape(input)} -c:a copy -f md5 - 2>/dev/null`
+    out[/MD5=([0-9a-f]+)/, 1]
+  end
+
+  def probe(input, entries)
+    `ffprobe -v error -show_entries #{entries} -of default=noprint_wrappers=1:nokey=1 #{Shellwords.escape(input)} 2>/dev/null`.strip
+  end
+
+  def which(bin)
+    ENV.fetch("PATH", "").split(File::PATH_SEPARATOR)
+       .map { |d| File.join(d, bin) }.find { |p| File.executable?(p) && !File.directory?(p) }
+  end
+end
+
+# ---- CLI --------------------------------------------------------------------
+if $PROGRAM_NAME == __FILE__
+  require "fileutils"
+
+  input = nil; outdir = nil; seconds = 5; verify = true; dry = false; segmenter = nil
+  args = ARGV.dup
+  until args.empty?
+    a = args.shift
+    case a
+    when "--out"       then outdir = args.shift
+    when "--seconds"   then seconds = Float(args.shift)
+    when "--segmenter" then segmenter = args.shift
+    when "--no-verify" then verify = false
+    when "--dry-run"   then dry = true
+    when /\A--/        then abort "media-chunk: unknown arg: #{a}"
+    else input = a
+    end
+  end
+  abort "usage: bin/media-chunk <media-file> --out <dir> [--seconds N]" if input.nil? || outdir.nil?
+  abort "media-chunk: no such file: #{input}" unless File.file?(input)
+
+  segs = if segmenter
+           # The seam: any program that cuts `input` into `outdir` and prints the same
+           # [{file,bytes,duration}] JSON. Nothing else about it is our business.
+           JSON.parse(`#{Shellwords.escape(segmenter)} #{Shellwords.escape(input)} #{Shellwords.escape(outdir)} #{seconds}`)
+         else
+           MediaChunk.segment_with_ffmpeg(input, outdir, seconds)
+         end
+
+  init_path = File.join(outdir, "init.mp4")
+  abort "media-chunk: segmenter produced no init.mp4" unless File.file?(init_path)
+
+  source = { "name" => File.basename(input), "bytes" => File.size(input),
+             "sha256" => "sha256:#{Digest::SHA256.file(input).hexdigest}" }
+  if MediaChunk.which("ffprobe")
+    source["duration"] = MediaChunk.probe(input, "format=duration").to_f
+    source["codec"] = MediaChunk.probe(input, "stream=codec_name").split("\n").first
+  end
+
+  if verify
+    want = MediaChunk.packet_md5(input)
+    got  = MediaChunk.packet_md5(File.join(outdir, "index.m3u8"), ["-allowed_extensions", "ALL"])
+    if want.nil? || got.nil?
+      abort "media-chunk: could not verify losslessness (ffmpeg absent?); pass --no-verify to skip, knowingly"
+    elsif want != got
+      abort "media-chunk: REFUSING — reassembled chunks do not match the source packet stream\n" \
+            "  source #{want}\n  chunks #{got}\n" \
+            "  The chunks would be an edit, not a re-containering. Do not publish them."
+    end
+    source["packets_md5"] = want
+  end
+
+  map = MediaChunk.plan(segments: segs, init: { "file" => "init.mp4", "bytes" => File.size(init_path) },
+                        source: source, target: seconds, lossless: verify ? true : "unverified",
+                        tool: segmenter || "ffmpeg -c:a copy -f hls -hls_segment_type fmp4")
+
+  if dry
+    puts JSON.pretty_generate(map)
+  else
+    path = File.join(outdir, "map.json")
+    File.write(path, JSON.pretty_generate(map) + "\n")
+    puts path
+  end
+  warn "media-chunk: #{map["chunks"].size} chunk(s), #{map["duration"]}s, lossless#{verify ? " (verified)" : " (UNVERIFIED)"}"
+end
