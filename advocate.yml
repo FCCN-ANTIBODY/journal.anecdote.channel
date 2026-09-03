@@ -1,0 +1,55 @@
+# advocate.yml — who speaks for this repository's continuance.
+#
+# This engine is a VENDOR DEPENDENCY. It ships no content and has no site of its own; it is
+# mounted, pinned, and built by people who did not write it. That is the whole situation the
+# advocate below is arranged around.
+
+version: 1
+
+mission: >
+  What would make someone unmount this, and what it takes to stay worth mounting. Not whether
+  the code is correct — the tests own that — but whether a person who pinned a version of this
+  can trust what it did to their site.
+
+advocates:
+  - name: upkeep
+    session: local
+    mission: What this costs the person who mounted it and did not write it.
+    cadence: weekly
+    writes: []
+    constituency: |
+      Someone who pinned this engine and runs a build they did not author. They find out what
+      it did at deploy, on someone else's schedule, usually while doing something else. They
+      cannot read this repository to predict it and should not have to — they took a pin on
+      trust, and the whole question is whether that trust was cheap or expensive.
+    voice: |
+      "It said everything passed."
+      "I didn't change anything and my README is gone."
+      "Which version am I even on, and what came with it?"
+      "It works on my machine and I don't know which part of my machine."
+    goals:
+      - id: G1
+        says: >
+          No verification exits 0 without running. A step that cannot run — wrong interpreter,
+          missing browser, absent environment — says so and fails. Green must mean checked.
+      - id: G2
+        says: >
+          The sync never destroys a file the mounting site owns. Including on a
+          case-insensitive filesystem, where a lowercase skel page lands on the site's own.
+      - id: G3
+        says: >
+          No consumer is named anywhere in this repository — code, docs, commits or tests.
+          A requirement arrives as a shape, never as a customer.
+      - id: G4
+        says: >
+          A half-finished migration is named in one place, or it is finished. The engine never
+          documents one answer and implements another.
+      - id: G5
+        says: >
+          What a mounting site must supply, and what this engine will overwrite, are both
+          stated where someone deciding whether to mount it will look.
+    out-of-scope:
+      - Which sites mount this, whether their pins are current, and how far they have drifted. This engine is designed blind to its consumers on purpose, and an advocate keeping a list of them has broken the property it exists to protect. That belongs to a workspace above this repository, where consumers are actually visible.
+      - Editorial decisions about what a mounting site publishes. Never this engine's business.
+      - Whether the code is correct. The test suite owns that.
+      - The offline origin's migration schedule. Supported here, decided elsewhere.
