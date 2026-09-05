@@ -23,6 +23,38 @@ So "video redaction" is two capabilities stacked: video as an exhibit at all, an
 redaction as a concept. **They should be studied in that order**, and the first may be worth having
 on its own.
 
+## The actual strategy: reveal byte ranges from the pile
+
+**Redaction is not painting. It is not revealing.**
+
+The root journal has a data-pile, and a pile can already **prove ranges of bytes**. Layer 3 of
+`data-pile/CONTRACT.md` is a forward hash ratchet: every block is committed in a signed manifest,
+`bin/prove` publishes a checkpoint key, and anyone can decrypt from there and confirm each plaintext
+against what was already committed. A withheld segment is not blacked out — **its bytes are simply
+not disclosed**, and the manifest still proves that something was there and what its digest was.
+
+That is the mechanism. Everything below is about the places it does not reach on its own.
+
+### The constraint nobody has hit yet: the ratchet reveals a SUFFIX, not a range
+
+`K_{seq+1} = sha256("ratchet:" || K_seq)`, so publishing `K_n` lets anyone derive every key after it.
+The contract says so plainly: *"publishing a later checkpoint proves only from that point forward."*
+
+**Forward-only disclosure gives you a suffix.** It cannot express *reveal 1–4 and 8–10, withhold
+5–7* — and withholding a middle is precisely the video case, because the thing you are hiding
+appears partway through a clip and then stops.
+
+Two ways out, and the second needs nothing new:
+
+1. Independently-derived per-block keys instead of a chain. This changes Layer 1 and edges toward new
+   key machinery, which invariant #8 says to avoid.
+2. **Split across feeds.** A pile already carries several `feed/<source>` branches and processes each
+   independently. Put the withheld segments on a feed that is never disclosed and the revealed ones
+   on a feed that is — arbitrary ranges, expressed entirely with machinery that exists.
+
+Either way this is **`data-pile`'s contract question, not the journal's**, and it should be raised
+there rather than worked around here.
+
 ## Why video is categorically harder than masking an image
 
 1. **Time is a second axis, and a single miss is a full disclosure.** A face must be covered in every
@@ -40,6 +72,41 @@ on its own.
    records an unturned knob here: a 64 KB inline cap in `composer/anecdote.mjs`, and a fountain block
    size nobody has tuned.
 
+## Where omission stops working, and the principle that resolves it
+
+**The codec has too much to say.** Bytes missing from the middle of an encoded stream do not yield a
+stream that plays with a gap in it; they yield a broken file. Deliberately damaging the stream is not
+a redaction technique, it is a corruption technique, and what appears on screen afterwards is the
+decoder's opinion rather than anyone's intent. So for the frames where a region must go, **some
+frames have to be re-encoded.** There is no version of this where that is avoided.
+
+### Embrace it: if we are modifying the frame, modify it all the way
+
+The instinct to fight this — to make the redacted frames blend in, match grain, preserve the encode
+so seamlessly that nobody can tell — is the wrong instinct, and inverting it turns the problem into
+the feature.
+
+> **A reconstructed frame should announce itself.** Do not imply that what was modified slips
+> seamlessly in, because there really is a difference, and hiding the difference is a lie about the
+> artifact's own provenance.
+
+Why this is better rather than merely honest:
+
+- **It moves the trust question off the pixels.** "Did they blur it well enough?" stops mattering when
+  the frame is not pretending to be original footage. The viewer is not being asked to assess a
+  cover-up; they are being shown a composite that says so.
+- **It makes the seam visible in the artifact itself.** A viewer can see which frames are proven
+  original bytes and which are reconstruction. That distinction is the whole point and it should not
+  live only in metadata that travels separately and gets lost.
+- **It is consistent with the constellation's other refusals.** Edit masks do not alter their target;
+  supersession does not edit in place; a distributor is legible as a distributor rather than mistaken
+  for the author. Making a reconstruction obviously a reconstruction is the same rule applied to
+  pixels.
+
+**Metadata posture that follows from it:** preserve as much as can be preserved, and be explicit that
+some is damaged. A re-encode destroys things, and claiming otherwise is worse than losing them. What
+is preserved should be stated; what was necessarily lost should be stated too.
+
 ## The constellation-specific problem, and it is the sharp one
 
 **Any pixel-level redaction requires re-encoding, and re-encoding produces new bytes.**
@@ -51,6 +118,12 @@ deterministic across tools. Video is that problem raised by an order of magnitud
 The consequence is unavoidable and should be accepted rather than engineered around:
 
 > **A redacted video is a new object, not a view of an old one.**
+
+**Refined, given the pile:** it is a **hybrid**, and that is better than either extreme. The revealed
+byte ranges are original and provable against the signed manifest; only the re-encoded frames are
+new, and those declare themselves. So the artifact is not "trust me, this is the video minus a bit" —
+it is *these ranges are proven to be exactly what was recorded, and these frames are reconstruction,
+and here is the boundary.*
 
 Which is already the constellation's answer to this shape of question elsewhere — supersession says a
 replacement *keeps nothing* and is re-derived from its own content; D13 says a mask stencils one
@@ -91,6 +164,9 @@ performs on someone else's material, something has been put in the wrong place.
 
 Small, ordered, and each answerable:
 
+0. **Raise the suffix-versus-range constraint with `data-pile`.** Nothing else here is designable
+   until it is known whether arbitrary ranges are expressible, and the split-across-feeds answer needs
+   that repo's opinion. This is the first move.
 1. **Can video be an exhibit at all?** Add the types and find out what breaks. This is independent of
    redaction and may be worth doing on its own.
 2. **Can a browser do the round trip with no server?** Decode, paint, re-encode, entirely on the
