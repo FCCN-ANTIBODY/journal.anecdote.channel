@@ -149,7 +149,33 @@
       <a href="{{ site.repo_url }}/issues">Issues</a>
       <a href="{{ site.repo_url }}/wiki">Wiki</a>
       <a href="{{ site.repo_url }}">Code</a>
-      <a href="https://github.com/search?q=repo:{{ site.repo_name }}+hippocratic&type=code">Search</a>
+      {%- comment -%}
+        Search covers every repository this journal's prose actually lives in — the mounting
+        site's own, plus each citation journal it mounts under journal/ — because a piece is
+        findable where it is WRITTEN, not where it is rendered. A site lists them in
+        `search_repos`; unset, the scope is its own `repo_name` alone, which is what this
+        link has always been. The `repo:` terms are OR'd and parenthesized explicitly because
+        that is the form GitHub documents (`repo:a OR repo:b`, and parentheses to group);
+        what two bare `repo:` terms side by side mean is left to the reader, and a footer
+        link is not the place to find out. Note this is a WEB search URL: the legacy REST
+        search engine rejects the grouped form, and does not serve this link.
+      {%- endcomment -%}
+      {%- assign search_repos = site.search_repos -%}
+      {%- assign search_count = search_repos | size -%}
+      {%- if search_count == 0 -%}
+        {%- assign search_repos = site.repo_name | split: "," -%}
+        {%- assign search_count = 1 -%}
+      {%- endif -%}
+      {%- capture search_scope -%}
+        {%- for repo in search_repos -%}
+          {%- unless forloop.first %} OR {% endunless -%}
+          repo:{{ repo }}
+        {%- endfor -%}
+      {%- endcapture -%}
+      {%- if search_count > 1 -%}
+        {%- assign search_scope = search_scope | prepend: "(" | append: ")" -%}
+      {%- endif -%}
+      <a href="https://github.com/search?q={{ search_scope | append: " hippocratic" | url_encode }}&type=code">Search</a>
     </div>
   </div>
   <dialog id="full-image" class="content">
