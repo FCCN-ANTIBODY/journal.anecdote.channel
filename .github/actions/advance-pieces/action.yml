@@ -1,0 +1,141 @@
+name: Advance citation-journal piece pins
+description: >-
+  Advances the piece submodule pins INSIDE each citation journal the calling site
+  mounts, and pushes each bump to that journal's own repository. This is one tier
+  below advance-submodules: that action rolls the journal pins the caller owns and
+  commits to the caller; this one rolls the pins a journal owns and commits THERE,
+  because a piece that has been ejected into a repository of its own is pinned by
+  the journal, not by the node that mounts the journal.
+
+  Run it BEFORE advance-submodules, so the journal has already taken its pieces
+  when the node takes the journal.
+
+  A node mounting a journal it does not own cannot push to it with the default
+  GITHUB_TOKEN, and should not be handed a key to an author's repository lightly.
+  So the token is an input with no default: absent, this reports what has gone
+  stale and changes nothing. That is the honest arrangement, and the report is
+  worth having on its own. The alternative, which needs no cross-repo credential
+  at all, is for the citation journal to run this action itself — check the engine
+  out at a path and `uses:` it with the journal's own GITHUB_TOKEN.
+
+inputs:
+  token:
+    description: >-
+      A token with `contents: write` on the mounted journals' repositories. Empty
+      (the default) means report-only — nothing is committed and nothing is pushed.
+    required: false
+    default: ""
+  branch:
+    description: The branch to advance in each journal repository.
+    required: false
+    default: main
+
+runs:
+  using: composite
+  steps:
+    - name: Advance piece pins inside each mounted journal
+      shell: bash
+      env:
+        PIECE_TOKEN: ${{ inputs.token }}
+        PIECE_BRANCH: ${{ inputs.branch }}
+      run: |
+        set -euo pipefail
+
+        # The content mount is the single content-dir/url-base key, the same one
+        # build/action.yml, bin/stats.sh and advance-submodules read.
+        mount=$(ruby -e "require 'yaml'; c = File.exist?('_config.yml') ? (YAML.load_file('_config.yml') || {}) : {}; print c.fetch('journal', 'journal')")
+
+        journals=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+          | awk -v m="$mount" '$2 ~ ("^" m "/") {print $2}')
+
+        if [ -z "$journals" ]; then
+          echo "advance-pieces: no journals mounted under $mount/; nothing to do"
+          exit 0
+        fi
+
+        [ -n "$PIECE_TOKEN" ] || echo "advance-pieces: no token supplied — reporting only, nothing will be pushed"
+
+        moved_any=
+        for journal in $journals; do
+          git submodule update --init "$journal" >/dev/null 2>&1 || true
+
+          # Operate on the journal's own branch, not the commit this node has pinned:
+          # the pin is this node's claim about the journal, and it is not what we are
+          # advancing here. This has to happen BEFORE looking for .gitmodules — the
+          # pinned commit is routinely older than the journal's branch, and testing
+          # the checkout first reports a journal that HAS ejected its pieces as one
+          # that has not.
+          git -C "$journal" fetch --quiet origin "$PIECE_BRANCH"
+          git -C "$journal" checkout --quiet -B "$PIECE_BRANCH" "origin/$PIECE_BRANCH"
+
+          if [ ! -f "$journal/.gitmodules" ]; then
+            echo "· $journal: holds no piece submodules"
+            continue
+          fi
+
+          pieces=$(git -C "$journal" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+          for piece in $pieces; do
+            git -C "$journal" submodule update --init "$piece" >/dev/null 2>&1 || true
+            url=$(git -C "$journal/$piece" remote get-url origin)
+            latest=$(git ls-remote "$url" HEAD | awk '{print $1}')
+            [ -n "$latest" ] || { echo "  ! $journal/$piece: no remote HEAD; left alone"; continue; }
+            git -C "$journal/$piece" fetch --quiet origin
+            git -C "$journal/$piece" checkout --quiet "$latest"
+            git -C "$journal" add "$piece"
+          done
+
+          if git -C "$journal" diff --cached --quiet; then
+            echo "· $journal: every piece already current"
+            continue
+          fi
+
+          echo "· $journal: pieces moved —"
+          git -C "$journal" diff --cached --name-only | sed 's/^/    /'
+          moved_any=1
+
+          if [ -z "$PIECE_TOKEN" ]; then
+            # Put the journal back exactly as it was found. `reset --hard` restores the
+            # gitlinks in the index but leaves each nested CHECKOUT at the commit this
+            # run advanced it to, so without the submodule update a report-only run
+            # leaves a tree holding newer content than its own pins name — and a build
+            # later in the same job would publish it. Reporting must not fire anything.
+            git -C "$journal" reset --hard --quiet "origin/$PIECE_BRANCH"
+            git -C "$journal" submodule update --init --force --quiet
+            continue
+          fi
+
+          origin_url=$(git -C "$journal" remote get-url origin)
+          case "$origin_url" in
+            *github.com*)
+              slug=$(printf '%s' "$origin_url" \
+                | sed -e 's#^git@github.com:#https://github.com/#' \
+                      -e 's#^https://github.com/##' -e 's#\.git$##')
+              # The token rides in the push URL rather than in a stored remote, so it
+              # is never written into the journal's checkout. Actions masks it in logs.
+              target="https://x-access-token:${PIECE_TOKEN}@github.com/${slug}.git"
+              shown="$slug"
+              ;;
+            *)
+              # Not GitHub. This constellation is migrating off it on purpose, so the
+              # action does not insist: push through the configured remote and let the
+              # environment supply credentials. The token input is still the switch
+              # that says push at all — here it is consent, not a credential.
+              target=origin
+              shown="$origin_url"
+              ;;
+          esac
+
+          git -C "$journal" -c user.name="github-actions[bot]" \
+            -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "ci: advance piece pins to HEAD [skip ci]"
+
+          set +x
+          git -C "$journal" push --quiet "$target" "HEAD:${PIECE_BRANCH}"
+          echo "  pushed to ${shown} (${PIECE_BRANCH})"
+        done
+
+        if [ -z "$moved_any" ]; then
+          echo "advance-pieces: nothing had moved"
+        elif [ -z "$PIECE_TOKEN" ]; then
+          echo "advance-pieces: the above would have been advanced; no token, so nothing fired"
+        fi
