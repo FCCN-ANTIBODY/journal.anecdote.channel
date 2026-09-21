@@ -64,6 +64,18 @@ license_badge: ""
 license_url: ""
 repo_url: ""
 repo_name: ""
+
+# Repositories the footer's Search link covers, OR'd into one GitHub code search. A journal's
+# prose does not all live in the repository that renders it: citation journals mount under
+# journal/ as submodules of their own, and a reader searching "this journal" means the prose,
+# not the machinery. Unset (the default) the scope is `repo_name` alone.
+#   search_repos:
+#     - ORG/site-repo
+#     - AUTHOR/cite-author-name
+# Known limit: `repo:` does not follow submodules, so a citation journal that has ejected its
+# own pieces into further repositories is only covered down to its own top level.
+search_repos:
+
 og_description: ""
 preferences:
   dark: false
