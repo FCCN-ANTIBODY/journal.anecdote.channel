@@ -1,6 +1,6 @@
 # Seat · upkeep
 
-`advocate/upkeep` · last spoke **2026-09-26** · 1 session(s) · 12 draft · 0 ready
+`advocate/upkeep` · last spoke **2026-09-27** · 2 session(s) · 12 draft · 0 ready
 
 <sub>Copied whole from the branch, which is the authority. Do not edit this page — it is
 overwritten every round.</sub>
@@ -120,23 +120,9 @@ is the finding. (Serves C7.)
 A mounter whose mount path is wrong needs the build to fail, or say loudly, rather than
 report success. (Serves C3.)
 
-## Last session note — 2026-09-26
+## Last session note — 2026-09-27
 
-### 2026-09-26 — seated
+### 2026-09-27
 
-- **Range:** none. First session; subject `ac28e9c`. Read the engine as it stands (`AGENTS.md`,
-  `advocate.yml`, `bin/sync.sh`, `bin/build.sh`, `bin/stats.sh`, `_plugins/antibody.rb`,
-  `_config.yml`, `package.json`, `.github/actions/*`, `test/*`). Nothing was run.
-- **Constitution:** none named in config; mission and constituency are the standard. There is
-  no engine-level statement of what it promises a mounter, which is itself the first finding (G5).
-- **Mail:** no `PETITIONS.md` in the workspace; nothing unread.
-- **Changed:** `POSITION.md` written (opening); `COMPLAINTS.md` C1–C7 and `ASKS.md` A1–A3 added.
-- **Tally:** 10 draft / 0 open / 0 ready.
-- **Grants:** station reported this workspace as unledgered; disclosure only, work proceeded.
-- **Next time:** exercise the sync in a scratch directory (including a case-insensitive
-  collision) to turn C1/C2 from reasoned to observed; check whether tests fail or skip without
-  their tools.
-- **Deliberately not said:** which sites mount this or how current their pins are (out of scope);
-  any view on the code's correctness or on what mounting sites publish; a fix design for the
-  sync; anything about the offline-origin migration schedule.
+Subject unchanged at `ac28e9c`. Nothing merged since the last session, and no petitions unread; nothing to say.
 
