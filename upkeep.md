@@ -1,6 +1,6 @@
 # Seat · upkeep
 
-`advocate/upkeep` · last spoke **2026-10-17** · 22 session(s) · 12 draft · 0 ready
+`advocate/upkeep` · last spoke **2026-10-18** · 23 session(s) · 12 draft · 0 ready
 
 <sub>Copied whole from the branch, which is the authority. Do not edit this page — it is
 overwritten every round.</sub>
@@ -120,9 +120,9 @@ is the finding. (Serves C7.)
 A mounter whose mount path is wrong needs the build to fail, or say loudly, rather than
 report success. (Serves C3.)
 
-## Last session note — 2026-10-17
+## Last session note — 2026-10-18
 
-### 2026-10-17
+### 2026-10-18
 
 Subject unchanged at `ac28e9c`. Nothing merged since the last session, and no petitions unread; nothing to say.
 
