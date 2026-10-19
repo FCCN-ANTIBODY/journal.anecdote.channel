@@ -222,6 +222,9 @@ entry = {
   "entry_point" => true,
   "area" => area,
   "issue" => latest,
+  # Every issue this journal has cut, newest first. A consumer reading this artifact over HTTP
+  # cannot list the directory; the entry point is where it learns what is here.
+  "issues" => built.reverse,
   "title" => latest ? "#{title} — current issue" : "#{title} — no issue yet"
 }.compact
 entry_body = latest ? "The current issue is [#{latest}](#{latest}.md)." : "*No issue has been cut yet.*"
