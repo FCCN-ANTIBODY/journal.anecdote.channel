@@ -52,3 +52,12 @@ named in the primer, but nowhere a mounter reads. Goal: G4.
 No statement, where someone deciding to mount would look, of what a site must supply or which
 paths the engine overwrites. Shadowing a skel file is documented as editing the engine's
 `sync.sh`, which a pinned mounter cannot do. Goal: G5.
+
+## C8 — "It said the artifact was inert, and now it has template tags in it."
+- status: draft
+- source: observed (#42; `AGENTS.md` ~l.105 vs ~l.114; `bin/build-intermediates`)
+
+The primer still promises intermediates are plain markdown with no template syntax, "so a
+consumer needs to trust nothing to render it". Since #42 carried pieces hold the engine's tags and
+the inertness check skips them on purpose. Someone downstream who believed the first sentence now
+holds files that need the engine's includes to mean anything. Goals: G4, G5.

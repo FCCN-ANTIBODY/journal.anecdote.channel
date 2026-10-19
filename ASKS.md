@@ -22,3 +22,11 @@ is the finding. (Serves C7.)
 
 A mounter whose mount path is wrong needs the build to fail, or say loudly, rather than
 report success. (Serves C3.)
+
+## A4 — someone receiving an intermediate who does not run the engine
+- status: draft
+- target: wherever the intermediate's contract is stated
+
+A person receiving an intermediate needs one statement of what rendering it requires (the
+engine's includes) and what they see if those are absent, and the inert-versus-tagged claim to
+agree with itself. (Serves C8, C7.)
