@@ -187,7 +187,7 @@ begin
     system("git commit -q -m fixture", exception: true)
     FileUtils.mkdir_p("journal/beat/pinned")
     File.write("journal/beat/pinned/index.md", "---\ntitle: Tagged\n---\n\nAs the paper put it [^1]\n\n{% include cite.html credit=\"A Reporter\" url=\"https://example.invalid/story\" %}\n")
-    `ruby #{TOOL.inspect} 2>&1`
+    $tagged_out = `ruby #{TOOL.inspect} 2>&1`
     $tagged_status = $?.exitstatus
     path = File.join("_intermediates", "journal", "beat", "pinned", "index.md")
     carried = File.exist?(path) ? File.read(path) : nil
@@ -195,6 +195,7 @@ begin
   ok("a piece carrying an engine tag is carried") { !carried.nil? }
   ok("and the tag travels intact") { carried.to_s.include?('{% include cite.html credit="A Reporter"') }
   ok("the run succeeds") { $tagged_status == 0 }
+  ok("and nothing is reported as not carried") { !$tagged_out.include?("NOT carried") }
   FileUtils.remove_entry(dir3)
 end
 

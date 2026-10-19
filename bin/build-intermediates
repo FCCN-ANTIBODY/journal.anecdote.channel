@@ -138,7 +138,7 @@ def write_piece(url, path, out)
   dest = File.join(out, url.sub(%r{\A/}, "").sub(%r{/\z}, ""), "index.md")
   FileUtils.mkdir_p(File.dirname(dest))
   File.write(dest, "#{front.to_yaml}---\n\n#{body.sub(/\A\n+/, "")}")
-
+  nil   # carried; a String here would read as a decline
 end
 
 FileUtils.mkdir_p(opts[:out])
@@ -232,9 +232,6 @@ File.write(File.join(opts[:out], "index.md"), "#{entry.to_yaml}---\n\n#{entry_bo
 unless refused.empty?
   warn "build-intermediates: #{refused.size} piece(s) NOT carried:"
   refused.each { |url, why| warn "  #{url} — #{why}" }
-  warn "  A mounting site evaluates template syntax in ITS build, against ITS includes and"
-  warn "  plugins. Remove it from the piece — a letter is prose, and anything it needs"
-  warn "  rendering is the journal's to render around it."
   abort "build-intermediates: --strict, so a declined piece is fatal" if opts[:strict]
 end
 
