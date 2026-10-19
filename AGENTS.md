@@ -111,15 +111,7 @@ redirect_from, redirect_to), because those belong to whichever site first publis
 nothing was ever moved. The layout goes too — a piece must not have to know who is
 publishing it.
 
-A carried piece may contain NO template syntax. `build-intermediates` **declines the piece** —
-names it, skips it, reports it, and carries its siblings — and `--strict` makes that fatal for a
-caller who would rather stop than publish an issue with a hole in it. The piece is not carried
-either way; only the fate of the rest of the run changes. It used to abort on the first offender,
-which reserved the harsher failure for the MORE recoverable problem: a piece whose repository had
-vanished was skipped and the issue shipped, while a piece merely containing a `{%` took every
-compliant letter beside it down. This is not about portability. A mounting site evaluates what it is handed, so a
-piece's `{% include %}` would run in THAT site's build, against ITS includes, ITS plugins and
-ITS filesystem, before anything is served — which puts it out of reach of any content policy,
-because no browser is involved. A contributor writes the letter; they do not get to run a step
-in the newsroom's build. Refusing at ejection is the gate doing its job: an editor is present
-in the author's own repository, and nobody is present at the tier above.
+A carried piece keeps its tags. `{% include cite.html %}`, `figure.html` and the rest of
+`_includes/` are how a piece written for this engine cites, shows and links; stripping or
+refusing them would hand upward a letter that is not the one that ran. It used to be refused
+at this step, and the first real citation to arrive with a citation block in it was refused.

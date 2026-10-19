@@ -6,10 +6,11 @@
 #
 # WHAT AN INTERMEDIATE IS FOR. An outer site that mounts this journal must not have to know
 # how this journal runs its shop. An area is free to reach for its own plugins and its own
-# esoteric layouts on the way to deciding what an issue is; what it hands upward has to be
-# something anything can read. So this writes an INERT artifact: front matter plus plain
-# markdown, no template syntax at all. Nothing needs to be trusted to render it, and the
-# JavaScript client reads it as readily as Jekyll does.
+# esoteric layouts on the way to deciding what an issue is; what it hands upward is the
+# arrangement, plus each piece as its author wrote it. A piece is written FOR THIS ENGINE:
+# its citation blocks, figures and the rest of _includes/ are the engine's own tags, and
+# whoever mounts the intermediate renders them with the engine's includes, the same way this
+# journal does. The artifact is front matter plus the piece's markdown, tags included.
 #
 # IT CARRIES THE PIECES TOO. The outer site bakes the issues, and to do that it has to see
 # the letters — so each cited piece is written out beside the arrangement, at the path its url
@@ -134,32 +135,10 @@ def write_piece(url, path, out)
   # The mounting site decides the layout. A piece must not have to know who is publishing it.
   front.delete("layout")
 
-  # A CARRIED PIECE MAY NOT CONTAIN TEMPLATE SYNTAX, and this refuses rather than warns.
-  #
-  # Not for portability — for what the syntax can reach. A mounting site builds what it is
-  # handed, and a piece's `{% include %}`, `{% raw_include %}` or any other tag is evaluated in
-  # THAT site's build, against ITS includes, ITS plugins, ITS filesystem. A contributor writes
-  # the letter; they do not get to run a step in the newsroom's build. No browser is involved,
-  # so no content policy reaches this: it happens before anything is served.
-  #
-  # This is the ejection gate doing its job. A piece is worked on in its author's own
-  # repository and ejected when it is ready; template syntax in an ejected piece is something
-  # an editor fixes there, where an editor is present, rather than something the tier above
-  # discovers unattended. Failing here is the whole point — the alternative is carrying it and
-  # hoping whoever mounts it is careful.
-  if (found = body.scan(/\{\{[^}]*\}\}|\{%-?\s*\w+/).uniq.first(3)).any?
-    # Declined, not fatal. The piece is still not carried — the security property is untouched —
-    # but a contributor's stray {% include %} does not get to stop every compliant letter beside
-    # it. The harsher failure was reserved for the MORE recoverable problem: a piece whose
-    # repository has vanished is skipped and the issue ships, while a piece that is merely
-    # present and non-compliant took the whole run down. That asymmetry was the bug.
-    return "template syntax (#{found.join(", ")})"
-  end
-
   dest = File.join(out, url.sub(%r{\A/}, "").sub(%r{/\z}, ""), "index.md")
   FileUtils.mkdir_p(File.dirname(dest))
   File.write(dest, "#{front.to_yaml}---\n\n#{body.sub(/\A\n+/, "")}")
-
+  nil   # carried; a String here would read as a decline
 end
 
 FileUtils.mkdir_p(opts[:out])
@@ -243,6 +222,9 @@ entry = {
   "entry_point" => true,
   "area" => area,
   "issue" => latest,
+  # Every issue this journal has cut, newest first. A consumer reading this artifact over HTTP
+  # cannot list the directory; the entry point is where it learns what is here.
+  "issues" => built.reverse,
   "title" => latest ? "#{title} — current issue" : "#{title} — no issue yet"
 }.compact
 entry_body = latest ? "The current issue is [#{latest}](#{latest}.md)." : "*No issue has been cut yet.*"
@@ -253,9 +235,6 @@ File.write(File.join(opts[:out], "index.md"), "#{entry.to_yaml}---\n\n#{entry_bo
 unless refused.empty?
   warn "build-intermediates: #{refused.size} piece(s) NOT carried:"
   refused.each { |url, why| warn "  #{url} — #{why}" }
-  warn "  A mounting site evaluates template syntax in ITS build, against ITS includes and"
-  warn "  plugins. Remove it from the piece — a letter is prose, and anything it needs"
-  warn "  rendering is the journal's to render around it."
   abort "build-intermediates: --strict, so a declined piece is fatal" if opts[:strict]
 end
 
@@ -264,16 +243,9 @@ end
 # The files this tool AUTHORS must be inert — anything that has to be rendered to be safe is
 # not portable, and the failure would be a blank page rather than an error.
 #
-# CARRIED PIECES ARE NOT COVERED HERE, and are not exempt: write_piece declines them before one
-# is ever written out, so nothing non-inert reaches this directory. This glob is deliberately
-# NON-RECURSIVE so it sees only what this tool authored — the issue files and the entry point —
-# rather than re-scanning pieces that already passed their own stricter gate.
-#
-# (This comment once said a carried piece "may legitimately hold Liquid, which is warned about
-# rather than refused". That WAS true until the refusal landed the next day, and it then sat
-# here describing the previous version — which is worse than a wrong comment, because it reads
-# as authoritative and a consumer still pinned behind the change confirms it. If the two gates
-# ever genuinely diverge, say so in write_piece, which is where the decision is made.)
+# CARRIED PIECES ARE NOT COVERED HERE, on purpose. A piece holds the engine's own tags and
+# travels with them (see write_piece). This glob is deliberately NON-RECURSIVE so it sees only
+# what this tool authored — the issue files and the entry point — and never a piece.
 #
 # The non-recursion is load-bearing, so name the authored files rather than globbing a shape:
 # were the entry point ever moved into a subdirectory, `out/*.md` would stop seeing it and it

@@ -162,12 +162,11 @@ Dir.chdir(dir2) do
 end
 FileUtils.remove_entry(dir2)
 
-# A piece may not smuggle template syntax into a mounting site's BUILD. Nothing about a browser
-# reaches this: the tag would be evaluated by whoever mounts the piece, against their includes
-# and their plugins, before anything is served.
+# A piece is written for this engine, tags and all. What is handed upward carries them: a
+# citation block in the letter is a citation block in the intermediate.
 begin
-  dir3 = Dir.mktmpdir("intermediates-hostile-")
-  out = nil
+  dir3 = Dir.mktmpdir("intermediates-tagged-")
+  carried = nil
   Dir.chdir(dir3) do
     system("git init -q -b main && git config user.email t@t && git config user.name t", exception: true)
     File.write("_config.yml", "title: Test Area\ncivic_node: Test Area\njournal: journal\n")
@@ -179,7 +178,7 @@ begin
       cut: 2026-08-18
       pieces:
         - url: "/journal/beat/pinned/"
-          title: "A letter with a tag in it"
+          title: "A letter with a citation block in it"
           author: "Author One"
       ---
     MD
@@ -187,27 +186,16 @@ begin
     system("git update-index --add --cacheinfo 160000,#{PINNED_SHA},journal/beat/pinned", exception: true)
     system("git commit -q -m fixture", exception: true)
     FileUtils.mkdir_p("journal/beat/pinned")
-    File.write("journal/beat/pinned/index.md", "---\ntitle: Tagged\n---\n\n{% include contact/someone.md %}\n")
-    out = `ruby #{TOOL.inspect} 2>&1`
-    $hostile_status = $?.exitstatus
-    $strict_out = `ruby #{TOOL.inspect} --strict 2>&1`
-    $strict_status = $?.exitstatus
+    File.write("journal/beat/pinned/index.md", "---\ntitle: Tagged\n---\n\nAs the paper put it [^1]\n\n{% include cite.html credit=\"A Reporter\" url=\"https://example.invalid/story\" %}\n")
+    $tagged_out = `ruby #{TOOL.inspect} 2>&1`
+    $tagged_status = $?.exitstatus
+    path = File.join("_intermediates", "journal", "beat", "pinned", "index.md")
+    carried = File.exist?(path) ? File.read(path) : nil
   end
-  # The security property: a piece carrying template syntax is never carried, in either mode.
-  ok("nothing was written for it") { !File.exist?(File.join(dir3, "_intermediates", "journal", "beat", "pinned", "index.md")) }
-  ok("the refusal names the piece and what it found") do
-    out.include?("/journal/beat/pinned/") && out.include?("{% include")
-  end
-  # ...but declining a piece is not declining the ISSUE. A contributor's stray include must not
-  # stop every compliant letter beside it — the same posture the missing-index.md branch already
-  # takes, and the one a checkpoint build depends on. The harsher failure used to be reserved for
-  # the MORE recoverable problem, which was the bug.
-  ok("the run still succeeds — a declined piece does not take the issue down") { $hostile_status == 0 }
-  ok("the issue was still written") { File.exist?(File.join(dir3, "_intermediates", "index.md")) }
-  ok("the decline is reported, not swallowed") { out.include?("NOT carried") }
-  # A caller that would rather stop than publish an issue with a hole in it says so.
-  ok("--strict makes a decline fatal") { $strict_status != 0 }
-  ok("--strict says why it stopped") { $strict_out.include?("--strict") }
+  ok("a piece carrying an engine tag is carried") { !carried.nil? }
+  ok("and the tag travels intact") { carried.to_s.include?('{% include cite.html credit="A Reporter"') }
+  ok("the run succeeds") { $tagged_status == 0 }
+  ok("and nothing is reported as not carried") { !$tagged_out.include?("NOT carried") }
   FileUtils.remove_entry(dir3)
 end
 
