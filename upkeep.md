@@ -1,6 +1,6 @@
 # Seat · upkeep
 
-`advocate/upkeep` · last spoke **2026-10-24** · 29 session(s) · 14 draft · 0 ready
+`advocate/upkeep` · last spoke **2026-10-25** · 30 session(s) · 14 draft · 0 ready
 
 <sub>Copied whole from the branch, which is the authority. Do not edit this page — it is
 overwritten every round.</sub>
@@ -139,9 +139,9 @@ A person receiving an intermediate needs one statement of what rendering it requ
 engine's includes) and what they see if those are absent, and the inert-versus-tagged claim to
 agree with itself. (Serves C8, C7.)
 
-## Last session note — 2026-10-24
+## Last session note — 2026-10-25
 
-### 2026-10-24
+### 2026-10-25
 
 Subject unchanged at `a1acc43`. Nothing merged since the last session, and no petitions unread; nothing to say.
 
