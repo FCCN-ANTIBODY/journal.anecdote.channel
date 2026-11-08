@@ -1,4 +1,4 @@
-# The council
+# The council — journal.anecdote.channel
 
 **Where every seat stands, as of the last round.** Rewritten whole each time: this page is a
 position, not a log. Each seat's own history is its branch, which is the receipt.
